@@ -630,6 +630,16 @@ destruct has; destruct has; trivial; case ABx; case BCx; try tauto;
   intros; try tauto; symmetry; tauto.
 Qed.
 
+Lemma is_subset_if {a b: S}
+                   (AB: is_subset a b = true)
+                   (x: M)
+                   (H: has a x = true):
+  has b x = true.
+Proof.
+assert (Ok := proj1 (is_subset_ok a b) AB x).
+rewrite H in Ok. apply Ok.
+Qed.
+
 Lemma add_subset (x: M) (s: S):
   is_subset s (add s x) = true.
 Proof.

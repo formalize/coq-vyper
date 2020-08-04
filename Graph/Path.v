@@ -1,4 +1,5 @@
 From Coq Require List.
+Local Open Scope list_scope.
 
 (* A path has its start (but not its end) in its type. *)
 Inductive path {V: Type} (R: V -> V -> Prop) (start: V)
@@ -92,7 +93,7 @@ Lemma firstn_endpoint {V: Type}
                       {a b: list V}
                       {v: V}
                       (p: path R start)
-                      (H: vertices p = (a ++ v :: b)%list):
+                      (H: vertices p = a ++ v :: b):
   endpoint (firstn (S (List.length a)) p) = v.
 Proof.
 generalize a H. clear H a.
@@ -125,3 +126,59 @@ Lemma is_empty_false {V: Type}
 Proof.
 induction p; easy.
 Qed.
+
+Lemma nonempty_if_has_two_vertices
+    {V: Type}
+    {R: V -> V -> Prop}
+    {start: V}
+    {p: path R start}
+    {x y: V}
+    {a b c: list V}
+    (H: vertices_with_start p = a ++ x :: b ++ y :: c):
+  is_empty p = false.
+Proof.
+unfold vertices_with_start in H.
+destruct p. 2: { easy. }
+cbn in *.
+destruct a.
+{
+  rewrite List.app_nil_l in H.
+  inversion H. subst.
+  symmetry in H2. 
+  apply List.app_eq_nil in H2.
+  destruct H2.
+  discriminate.
+}
+cbn in *.
+inversion H. subst.
+symmetry in H2.
+apply List.app_eq_nil in H2.
+destruct H2.
+discriminate.
+Qed.
+
+(** Get the second vertex in a non-empty path. *)
+Program Definition second
+    {V: Type}
+    {R: V -> V -> Prop}
+    {start: V}
+    (p: path R start)
+    (Nonempty: is_empty p = false)
+: V
+:= match p as p' return p = p' -> V with
+   | Nil _ => fun E => False_rect _ _
+   | Cons v _ _ => fun _ => v
+   end eq_refl.
+
+(** Remove the first arc from a non-empty path. *)
+Program Definition rest
+    {V: Type}
+    {R: V -> V -> Prop}
+    {start: V}
+    (p: path R start)
+    (Nonempty: is_empty p = false)
+: path R (second p Nonempty)
+:= match p as p' return p = p' -> path R (second p Nonempty) with
+   | Nil _ => fun E => False_rect _ _
+   | Cons v _ next => fun _ => next
+   end eq_refl.
