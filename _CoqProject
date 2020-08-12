@@ -8,7 +8,7 @@ Map.v
 
 Graph/Path.v
 Graph/Cycle.v
-Graph/MaxLenPath.v
+Graph/LongestPath.v
 
 Config.v
 UntypedAST.v

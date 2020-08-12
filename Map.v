@@ -4,7 +4,7 @@ From Coq Require Import FSets.FMapAVL FSets.FMapFacts.
 Require Import StringCmp.
 
 Fixpoint alist_lookup {Key Value: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
-                       (a: list (Key * Value)) (query: Key)
+                      (a: list (Key * Value)) (query: Key)
 : option Value
 := match a with
    | nil => None
@@ -315,9 +315,9 @@ Definition string_avl_map_impl (Value: Type): class string_dec Value (string_avl
 Section MapFacts.
 
 Context {Key: Type} {KeyEqDec: forall x y: Key, {x = y} + {x <> y}}
-         {Value: Type}
-         {M: Type}
-         {MapImpl: class KeyEqDec Value M}.
+        {Value: Type}
+        {M: Type}
+        {MapImpl: class KeyEqDec Value M}.
 
 Lemma empty_lookup (query: Key):
   lookup empty query = None.
