@@ -11,7 +11,7 @@ Context {V: Type} (R: V -> V -> Prop).
 (** A pathmap associates with every vertex a path starting at that vertex.
     It also caches the path's length.
     The Max requirement says that the path should
-    either have the maximal possible length or be long enough as defined by the bound.
+    either have the maximal possible length or be long enough as defined by [bound].
  *)
 Record pathmap {bound: nat} := {
   (** This typing is a bit weird but if it's typed straightforwardly ([pm_lookup x: Path.t R x])
@@ -314,11 +314,11 @@ Definition collect_alist {bound: nat} {boundN: N}
                (x, (existT _ x p, n)))
             all.
 
-Lemma collect_alist_all {bound: nat} {boundN: N}
-                        (pm: pathmap bound)
-                        (BoundOk: boundN = N.of_nat bound)
-                        (all_ok: forall v: V, In v all)
-                        (x: V):
+Lemma collect_alist_total {bound: nat} {boundN: N}
+                          (pm: pathmap bound)
+                          (BoundOk: boundN = N.of_nat bound)
+                          (all_ok: forall v: V, In v all)
+                          (x: V):
   match Map.alist_lookup EqDec (collect_alist pm BoundOk) x with
   | Some _ => True
   | None => False
@@ -394,5 +394,142 @@ rewrite<- Heqc in Max. subst.
 case Max; clear Max; intro Max. { left. lia. }
 right. split. lia. tauto.
 Qed.
+
+(** Do [collect] on every vertex and build a Map out of it. *)
+Definition collect_map {bound: nat} {boundN: N}
+                       (pm: pathmap bound)
+                       (BoundOk: boundN = N.of_nat bound)
+:= Map.of_alist (collect_alist pm BoundOk).
+
+Lemma collect_map_total {bound: nat} {boundN: N}
+                        (pm: pathmap bound)
+                        (BoundOk: boundN = N.of_nat bound)
+                        (all_ok: forall v: V, In v all)
+                        (x: V):
+  match Map.lookup (collect_map pm BoundOk) x with
+  | Some _ => True
+  | None => False
+  end.
+Proof.
+unfold collect_map. rewrite Map.of_alist_ok.
+apply collect_alist_total. assumption.
+Qed.
+
+Local Lemma collect_map_lookup_helper {bound: nat} {boundN: N}
+                                      (pm: pathmap bound)
+                                      (BoundOk: boundN = N.of_nat bound)
+                                      (all_ok: forall v: V, In v all)
+                                      (x: V)
+                                      (E: Map.lookup (collect_map pm BoundOk) x = None):
+  False.
+Proof.
+assert (T := collect_map_total pm BoundOk all_ok x).
+rewrite E in T. exact T.
+Qed.
+
+Definition collect_map_lookup {bound: nat} {boundN: N}
+                              (pm: pathmap bound)
+                              (BoundOk: boundN = N.of_nat bound)
+                              (all_ok: forall v: V, In v all)
+                              (x: V)
+:= match Map.lookup (collect_map pm BoundOk) x as r return _ = r -> _ with
+   | Some x => fun _ => x
+   | None => fun E => False_rect _ (collect_map_lookup_helper pm BoundOk all_ok x E)
+   end eq_refl.
+
+Lemma collect_map_start {bound: nat} {boundN: N}
+                        (pm: pathmap bound)
+                        (BoundOk: boundN = N.of_nat bound)
+                        (all_ok: forall v: V, In v all)
+                        (x: V):
+  projT1 (fst (collect_map_lookup pm BoundOk all_ok x)) = x.
+Proof.
+unfold collect_map_lookup.
+assert (T := collect_map_total pm BoundOk all_ok x).
+assert (A := collect_alist_start pm BoundOk x).
+unfold collect_map in *. rewrite Map.of_alist_ok in T.
+remember (collect_map_lookup_helper pm BoundOk all_ok x) as foo. clear Heqfoo.
+revert foo. unfold collect_map. rewrite Map.of_alist_ok. intro foo.
+now destruct (Map.alist_lookup EqDec (collect_alist pm BoundOk)).
+Qed.
+
+Lemma collect_map_len {bound: nat} {boundN: N}
+                      (pm: pathmap bound)
+                      (BoundOk: boundN = N.of_nat bound)
+                      (all_ok: forall v: V, In v all)
+                      (x: V):
+  let p := (collect_map_lookup pm BoundOk all_ok x) in
+  snd p = N.of_nat (Path.length (projT2 (fst p))).
+Proof.
+unfold collect_map_lookup.
+assert (T := collect_map_total pm BoundOk all_ok x).
+assert (A := collect_alist_len pm BoundOk x).
+unfold collect_map in *. rewrite Map.of_alist_ok in T.
+remember (collect_map_lookup_helper pm BoundOk all_ok x) as foo. clear Heqfoo.
+revert foo. unfold collect_map. rewrite Map.of_alist_ok. intro foo.
+now destruct (Map.alist_lookup EqDec (collect_alist pm BoundOk)).
+Qed.
+
+Lemma collect_map_max {bound: nat} {boundN: N}
+                      (pm: pathmap bound)
+                      (BoundOk: boundN = N.of_nat bound)
+                      (all_ok: forall v: V, In v all)
+                      (x: V):
+  let (p, n) := (collect_map_lookup pm BoundOk all_ok x) in
+    n = N.of_nat (S bound)
+     \/
+    (n < N.of_nat (S bound))%N
+     /\
+    forall q: Path.t R x, Path.length q <= Path.length (projT2 p).
+Proof.
+unfold collect_map_lookup.
+assert (T := collect_map_total pm BoundOk all_ok x).
+assert (A := collect_alist_max pm BoundOk x).
+unfold collect_map in *. rewrite Map.of_alist_ok in T.
+remember (collect_map_lookup_helper pm BoundOk all_ok x) as foo. clear Heqfoo.
+revert foo. unfold collect_map. rewrite Map.of_alist_ok. intro foo.
+now destruct (Map.alist_lookup EqDec (collect_alist pm BoundOk)).
+Qed.
+
+Definition pathmap_advance {bound: nat} {boundN: N}
+                           (pm: pathmap bound)
+                           (BoundOk: boundN = N.of_nat bound)
+                           (all_ok: forall v: V, In v all)
+: pathmap (S bound)
+:= let m := collect_map pm BoundOk in
+   {|
+      pm_lookup x :=
+         match Map.lookup m x as r return _ = r -> _ with
+         | Some x => fun _ => x
+         | None => fun E => False_rect _ (collect_map_lookup_helper pm BoundOk all_ok x E)
+         end eq_refl;
+      pm_Start := collect_map_start pm BoundOk all_ok;
+      pm_Len := collect_map_len pm BoundOk all_ok;
+      pm_Max := collect_map_max pm BoundOk all_ok;
+   |}.
+
+Local Lemma compute_pathmap_rec_helper {bound boundN new_bound}
+                                       (BoundOk : boundN = N.of_nat bound)
+                                       (E : bound = S new_bound):
+  N.pred boundN = N.of_nat new_bound.
+Proof.
+lia.
+Qed.
+
+Local Fixpoint compute_pathmap_rec (bound: nat) (boundN: N)
+                                   (BoundOk: boundN = N.of_nat bound)
+                                   (all_ok: forall v: V, In v all)
+: pathmap bound
+:= match bound as bound' return bound = bound' -> _ with
+   | O => fun _ => zero_pathmap
+   | S new_bound => fun E =>
+        let new_boundN := N.pred boundN in
+        let ok := compute_pathmap_rec_helper BoundOk E in
+        pathmap_advance (compute_pathmap_rec new_bound new_boundN ok all_ok) ok all_ok
+   end eq_refl.
+
+Definition compute_pathmap (all_ok: forall v: V, In v all) (bound: nat)
+: pathmap bound
+:= compute_pathmap_rec bound (N.of_nat bound) eq_refl all_ok.
 
 End LongestPath.
