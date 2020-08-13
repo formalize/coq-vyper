@@ -55,8 +55,22 @@ Fixpoint vertices {V: Type} {R: V -> V -> Prop} {start: V} (p: path R start)
    | Cons v _ next => cons v (vertices next)
    end.
 
+Lemma vertices_length {V: Type} {R: V -> V -> Prop} {start: V} (p: path R start):
+  List.length (vertices p) = length p.
+Proof.
+induction p. { easy. }
+cbn. now f_equal.
+Qed.
+
 Definition vertices_with_start {V: Type} {R: V -> V -> Prop} {start: V} (p: path R start)
 := (start :: vertices p)%list.
+
+Lemma vertices_with_start_length {V: Type} {R: V -> V -> Prop} {start: V} (p: path R start):
+  List.length (vertices_with_start p) = S (length p).
+Proof.
+cbn. f_equal.
+apply vertices_length.
+Qed.
 
 (** Truncate the path to the given maximum number of vertices (not including the start). *)
 Fixpoint firstn {V: Type}

@@ -10,6 +10,7 @@ Graph/Path.v
 Graph/Cycle.v
 Graph/Dirichlet.v
 Graph/LongestPath.v
+Graph/Depthmap.v
 
 Config.v
 UntypedAST.v

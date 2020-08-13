@@ -13,7 +13,7 @@ Context {V: Type} (R: V -> V -> Prop).
     The Max requirement says that the path should
     either have the maximal possible length or be long enough as defined by [bound].
  *)
-Record pathmap {bound: nat} := {
+Record pathmap (bound: nat) := {
   (** This typing is a bit weird but if it's typed straightforwardly ([pm_lookup x: Path.t R x])
       then typing the Map becomes a problem.
       The best solution would be to have a dependent Map. Why don't we have it already?
@@ -28,7 +28,11 @@ Record pathmap {bound: nat} := {
                      /\
                     forall q: Path.t R x, Path.length q <= Path.length (projT2 p)
 }.
-Arguments pathmap (bound): clear implicits.
+Arguments pm_lookup {bound}.
+Arguments pm_Start  {bound}.
+Arguments pm_Len    {bound}.
+Arguments pm_Max    {bound}.
+
 
 (** The zero pathmap associates an empty path to every vertex. *)
 Definition zero_pathmap
