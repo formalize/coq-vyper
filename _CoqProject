@@ -5,6 +5,7 @@ Lib2/ListSet2.v
 StringCmp.v
 FSet.v
 Map.v
+MapSig.v
 
 Graph/Path.v
 Graph/Cycle.v

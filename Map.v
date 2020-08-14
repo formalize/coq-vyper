@@ -14,6 +14,19 @@ Fixpoint alist_lookup {Key Value: Type} (KeyEqDec: forall x y: Key, {x = y} + {x
          else alist_lookup KeyEqDec tail query
    end.
 
+Lemma alist_lookup_not_in {Key Value: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
+                          (a: list (Key * Value)) (query: Key)
+                          (H: ~ In query (map fst a)):
+  alist_lookup KeyEqDec a query = None.
+Proof.
+induction a. { trivial. }
+cbn in *.
+destruct a as (k, v). cbn in H.
+remember (KeyEqDec query k) as e. destruct e.
+{ clear Heqe. symmetry in e. tauto. }
+tauto.
+Qed.
+
 Class class {Key: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
              (Value: Type)
              (M: Type)
@@ -29,7 +42,7 @@ Class class {Key: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
 
   empty: M;
   empty_ok: is_empty empty = true;
-  
+
   insert: M -> Key -> Value -> M;
   insert_ok (m: M) (key: Key) (value: Value) (x: Key):
     lookup (insert m key value) x
@@ -41,7 +54,7 @@ Class class {Key: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
   remove: M -> Key -> M;
   remove_ok (m: M) (key: Key) (x: Key):
     lookup (remove m key) x
-     = 
+     =
     if KeyEqDec key x
       then None
       else lookup m x;

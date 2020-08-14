@@ -89,7 +89,7 @@ Local Lemma interpret_call_helper {this_decl: decl}
                                   {arg_names: list string}
                                   {body: expr}
                                   (E: this_decl = FunDecl fun_name arg_names body):
-  let H := string_set_impl in FSet.is_subset (expr_callset body) (decl_callset this_decl) = true.
+  let _ := string_set_impl in FSet.is_subset (expr_callset body) (decl_callset this_decl) = true.
 Proof.
 subst this_decl. unfold decl_callset. apply FSet.is_subset_refl.
 Qed.
@@ -102,7 +102,7 @@ Lemma call_descend {call_depth_bound new_call_depth_bound current_fun_depth: nat
                    (this_decl_ok: cd_declmap cd this_fun_name = Some this_decl)
                    (current_fun_depth_ok:
                      cd_depthmap cd this_fun_name = Some current_fun_depth)
-                   (e : expr)
+                   (e: expr)
                    (CallOk : let _ := string_set_impl in
                              FSet.is_subset (expr_callset e) (decl_callset this_decl) = true)
                    (Ebound : call_depth_bound = S new_call_depth_bound)
