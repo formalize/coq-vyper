@@ -11,6 +11,12 @@ Context {V: Type}
         (all: list V)
         (all_ok: forall v: V, In v all).
 
+Lemma forall_all (P: V -> Prop) (H: Forall P all):
+  forall v: V, P v.
+Proof.
+intro v. rewrite Forall_forall in H. apply H. apply all_ok.
+Qed.
+
 Local Lemma cycle_from_long_path_helper {start: V}
                                         {p: Path.t R start}
                                         (Long: length all <= Path.length p):
@@ -102,8 +108,48 @@ Fixpoint look_for_cycle_rec (pm: pathmap R (length all))
            eq_refl
    end eq_refl.
 
-(** Either discover a cycle or confirm that all the paths in [pm] are truly longest. *)
-Definition look_for_cycle (pm: pathmap R (length all))
-:= look_for_cycle_rec pm (N.of_nat (length all)) eq_refl all.
+Lemma pathmap_mono (pm: pathmap R (length all))
+                   (NotTooLong: forall v: V, (snd (pm_lookup _ _ pm v) < N.of_nat (length all))%N)
+                   (a b: V)
+                   (H: R a b):
+  (snd (pm_lookup _ _ pm b) < snd (pm_lookup _ _ pm a))%N.
+Proof.
+assert (MA := pm_Max R _ pm a).
+assert (MB := pm_Max R _ pm b).
+assert (LA := pm_Len R _ pm a).
+assert (LB := pm_Len R _ pm b).
+assert (SA := pm_Start R _ pm a).
+assert (SB := pm_Start R _ pm b).
+assert (NA := NotTooLong a).
+assert (NB := NotTooLong b).
+destruct (pm_lookup _ _ pm a) as (pa, na).
+destruct (pm_lookup _ _ pm b) as (pb, nb).
+cbn in *.
+assert (L: forall q: Path.t R a, Path.length q <= Path.length (projT2 pa)).
+{
+  case MA. 2:tauto. intro E. subst. rewrite E in NA.
+  apply N.lt_irrefl in NA. contradiction.
+}
+subst a b.
+assert (Q := L (Path.Cons _ H (projT2 pb))).
+cbn in Q. 
+apply Gt.le_S_gt in Q.
+subst.
+rewrite<- N.compare_lt_iff.
+rewrite N2Nat.inj_compare.
+rewrite PeanoNat.Nat.compare_lt_iff.
+repeat rewrite Nat2N.id.
+apply Q.
+Qed.
+
+(** Either discover a cycle or produce a depthmap. *)
+Definition cycle_or_depthmap
+: Cycle.t R + { f: V -> N | forall a b: V,  R a b  ->  (f b < f a)%N }
+:= let pm := long_enough_pathmap in
+   match look_for_cycle_rec pm (N.of_nat (length all)) eq_refl all with
+   | inl cycle => inl cycle
+   | inr H => inr (exist _ (fun v => snd (pm_lookup _ _ pm v)) 
+                           (pathmap_mono pm (forall_all _ H)))
+   end.
 
 End Depthmap.
