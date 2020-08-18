@@ -11,6 +11,7 @@ Class VyperConfig := {
   Z_of_uint256: uint256 -> Z;
   uint256_of_Z: Z -> uint256;
   storage_lookup: world_state -> string -> option uint256;
+  storage_insert: world_state -> string -> uint256 -> world_state;
 }.
 
 Definition sample_config
@@ -24,6 +25,7 @@ Definition sample_config
       Z_of_uint256 := id;
       uint256_of_Z z := (z mod 2^256)%Z;
       storage_lookup := let _ := Map.string_avl_map_impl in Map.lookup;
+      storage_insert := let _ := Map.string_avl_map_impl in Map.insert;
    |}.
 
 Definition zero256 {C: VyperConfig} := uint256_of_Z 0%Z.

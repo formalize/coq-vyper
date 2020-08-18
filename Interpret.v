@@ -5,42 +5,46 @@ Require FSet Map UInt256.
 Local Open Scope list_scope.
 Local Open Scope string_scope.
 
-Inductive expr_result (type: Type)
-:= ExprSuccess (value: type)
- | ExprError (msg: string).
-Arguments ExprSuccess {type}.
-Arguments ExprError {type}.
-
-Inductive stmt_abort (return_type: Type)
-:= AbortError (msg: string)
- | AbortBreak
- | AbortContinue
- | AbortReturnFromFunction
- | AbortReturnFromContract
- | AbortRevert.
-
 Section Interpret.
 
 Context {C: VyperConfig}.
 
+Inductive abort
+:= AbortError (msg: string)
+ | AbortException (data: uint256)
+ | AbortBreak
+ | AbortContinue
+ | AbortReturnFromContract
+ | AbortRevert.
+
+Inductive expr_result (type: Type)
+:= ExprSuccess (value: type)
+ | ExprAbort (a: abort).
+Arguments ExprSuccess {type}.
+Arguments ExprAbort {type}.
+
 Inductive stmt_result (return_type: Type)
 := StmtSuccess
- | StmtAbort (a: stmt_abort return_type).
+ | StmtAbort (a: abort)
+ | StmtReturnFromFunction (value: return_type).
 Arguments StmtSuccess {_}.
 Arguments StmtAbort {_}.
+Arguments StmtReturnFromFunction {_}.
+
+Definition expr_error {type: Type} (msg: string) := @ExprAbort type (AbortError msg).
 
 Definition interpret_unop (op: unop) (a: uint256)
 : expr_result uint256
 := match UInt256.interpret_unop op a with
    | Some result => ExprSuccess result
-   | None => ExprError "arithmetic error"
+   | None => expr_error "arithmetic error"
    end.
 
 Definition interpret_binop (op: binop) (a b: uint256)
 : expr_result uint256
 := match UInt256.interpret_binop op a b with
    | Some result => ExprSuccess result
-   | None => ExprError "arithmetic error"
+   | None => expr_error "arithmetic error"
    end.
 
 Record calldag := {
@@ -91,9 +95,9 @@ Fixpoint bind_args (names: list string) (values: list uint256)
 Local Lemma interpret_call_helper {this_decl: decl}
                                   {fun_name: string}
                                   {arg_names: list string}
-                                  {body: expr}
+                                  {body: small_stmt} (* list stmt *)
                                   (E: this_decl = FunDecl fun_name arg_names body):
-  let _ := string_set_impl in FSet.is_subset (expr_callset body) (decl_callset this_decl) = true.
+  let _ := string_set_impl in FSet.is_subset (small_stmt_callset body) (decl_callset this_decl) = true.
 Proof.
 subst this_decl. unfold decl_callset. apply FSet.is_subset_refl.
 Qed.
@@ -210,10 +214,76 @@ Definition fun_ctx_descend {call_depth_bound new_call_depth_bound}
 
 (*************************************************************************************************)
 
-Definition stmt_is_local_var_decl {C: VyperConfig} (s: stmt)
+Definition is_local_var_decl {C: VyperConfig} (s: stmt)
 := match s with
    | LocalVarDecl _ _ => true
    | _ => false
+   end.
+
+Program Definition var_decl_unpack {C: VyperConfig} (s: stmt) (IsVarDecl: is_local_var_decl s = true)
+: string * option expr
+:= match s with
+   | LocalVarDecl name init => (name, init)
+   | _ => False_rect _ _
+   end.
+Next Obligation.
+destruct s; cbn in IsVarDecl; try discriminate.
+assert (Bad := H name init). tauto.
+Qed.
+
+Definition do_assign {return_type: Type} 
+                     (world: world_state) (loc: string_map uint256)
+                     (lhs: assignable)
+                     (computed_rhs: expr_result uint256)
+: world_state * string_map uint256 * stmt_result return_type
+:= let _ := string_map_impl in
+   match computed_rhs with
+   | ExprAbort ab => (world, loc, StmtAbort ab)
+   | ExprSuccess a =>
+       match lhs with
+       | AssignableLocalVar name =>
+           match Map.lookup loc name with
+           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | Some _ => (world, Map.insert loc name a, StmtSuccess)
+           end
+       | AssignableStorageVar name =>
+           match storage_lookup world name with
+           | None => (world, loc, StmtAbort (AbortError "undeclared global variable"))
+           | Some _ => (storage_insert world name a, loc, StmtSuccess)
+           end
+       end
+   end.
+
+Definition do_binop_assign {return_type: Type} 
+                           (world: world_state) (loc: string_map uint256)
+                           (lhs: assignable)
+                           (op: binop)
+                           (computed_rhs: expr_result uint256)
+: world_state * string_map uint256 * stmt_result return_type
+:= let _ := string_map_impl in
+   match computed_rhs with
+   | ExprAbort ab => (world, loc, StmtAbort ab)
+   | ExprSuccess a =>
+       match lhs with
+       | AssignableLocalVar name =>
+           match Map.lookup loc name with
+           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | Some old_val =>
+                match interpret_binop op old_val a with
+                | ExprSuccess new_val => (world, Map.insert loc name new_val, StmtSuccess)
+                | ExprAbort ab => (world, loc, StmtAbort ab)
+                end
+           end
+       | AssignableStorageVar name =>
+           match storage_lookup world name with
+           | None => (world, loc, StmtAbort (AbortError "undeclared global variable"))
+           | Some old_val =>
+                match interpret_binop op old_val a with
+                | ExprSuccess new_val => (storage_insert world name new_val, loc, StmtSuccess)
+                | ExprAbort ab => (world, loc, StmtAbort ab)
+                end
+           end
+       end
    end.
 
 Fixpoint interpret_call {call_depth_bound: nat}
@@ -248,12 +318,12 @@ Fixpoint interpret_call {call_depth_bound: nat}
                    let (world', result_h) := interpret_expr world loc h
                                                             (callset_descend_head E CallOk)
                    in match result_h with
-                      | ExprError msg => (world', ExprError msg)
+                      | ExprAbort ab => (world', ExprAbort ab)
                       | ExprSuccess x =>
                          let (world'', result_t) := interpret_expr_list world' loc t
                                                                         (callset_descend_tail E CallOk)
                          in (world'', match result_t with
-                                      | ExprError _ => result_t
+                                      | ExprAbort _ => result_t
                                       | ExprSuccess y => ExprSuccess (x :: y)%list
                                       end)
                        end
@@ -269,31 +339,31 @@ Fixpoint interpret_call {call_depth_bound: nat}
                      let _ := string_map_impl in
                      (world, match Map.lookup loc name with
                              | Some val => ExprSuccess val
-                             | None => ExprError "Local variable not found"
+                             | None => expr_error "Local variable not found"
                              end)
                  | StorageVar name => fun _ => 
                      let _ := string_map_impl in
                      (world, match storage_lookup world name with
                              | Some val => ExprSuccess val
-                             | None => ExprError "Storage variable not found"
+                             | None => expr_error "Storage variable not found"
                              end)
                  | UnOp op a => fun E =>
                      let (world', result) := interpret_expr world loc a
                                                             (callset_descend_unop E CallOk)
                      in (world', match result with
                                  | ExprSuccess val => interpret_unop op val
-                                 | ExprError msg => result
+                                 | ExprAbort _ => result
                                  end)
                  | BinOp op a b => fun E =>
                      let (world', result_a) := interpret_expr world loc a
                                                               (callset_descend_binop_left E CallOk)
                      in match result_a with
-                     | ExprError msg => (world', result_a)
+                     | ExprAbort _ => (world', result_a)
                      | ExprSuccess x =>
                        let (world'', result_b) := interpret_expr world' loc b
                                                                  (callset_descend_binop_right E CallOk)
                        in (world'', match result_b with
-                                    | ExprError msg => result_b
+                                    | ExprAbort _ => result_b
                                     | ExprSuccess y => interpret_binop op x y
                                     end)
                      end
@@ -301,7 +371,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                      let (world', result_cond) := interpret_expr world loc cond
                                                                  (callset_descend_if_cond E CallOk)
                      in match result_cond with
-                        | ExprError msg => (world', result_cond)
+                        | ExprAbort _ => (world', result_cond)
                         | ExprSuccess cond_value =>
                             if (Z_of_uint256 cond_value =? 0)%Z
                               then interpret_expr world' loc no
@@ -313,7 +383,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                      let (world', result_a) := interpret_expr world loc a
                                                               (callset_descend_and_left E CallOk)
                      in match result_a with
-                        | ExprError msg => (world', result_a)
+                        | ExprAbort _ => (world', result_a)
                         | ExprSuccess a_value =>
                             if (Z_of_uint256 a_value =? 0)%Z
                               then (world', result_a)
@@ -324,7 +394,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                      let (world', result_a) := interpret_expr world loc a
                                                               (callset_descend_or_left E CallOk)
                      in match result_a with
-                        | ExprError msg => (world', result_a)
+                        | ExprAbort msg => (world', result_a)
                         | ExprSuccess a_value =>
                             if (Z_of_uint256 a_value =? 0)%Z
                               then interpret_expr world' loc b
@@ -336,17 +406,103 @@ Fixpoint interpret_call {call_depth_bound: nat}
                        interpret_expr_list world loc args
                                            (callset_descend_args E CallOk)
                      in match result_args with
-                        | ExprError msg => (world', ExprError msg)
+                        | ExprAbort ab => (world', ExprAbort ab)
                         | ExprSuccess arg_values =>
                             match fun_ctx_descend fc CallOk Ebound E with
                             | None => (* can't resolve the function, maybe it's a builtin *)
-                                      (world', ExprError "can't resolve function name")
+                                      (world', expr_error "can't resolve function name")
                             | Some new_fc => interpret_call new_fc world' arg_values
                             end
                         end
                  end eq_refl
          end eq_refl
- (*  in let interpret_stmt 
+     in let interpret_small_stmt (world: world_state)
+                                 (loc: string_map uint256)
+                                 (s: small_stmt)
+                                 (CallOk: let _ := string_set_impl in 
+                                          FSet.is_subset (small_stmt_callset s) 
+                                                         (decl_callset (fun_decl fc)) 
+                                           =
+                                          true)
+        : world_state * string_map uint256 * stmt_result uint256
+        := match s as s' return s = s' -> _ with
+           | Pass     => fun _ => (world, loc, StmtSuccess)
+           | Break    => fun _ => (world, loc, StmtAbort AbortBreak)
+           | Continue => fun _ => (world, loc, StmtAbort AbortContinue)
+           | Revert   => fun _ => (world, loc, StmtAbort AbortRevert)
+           | Return None => fun _ => (world, loc, StmtReturnFromFunction zero256)
+           | Return (Some e) => fun E =>
+                let (world', result) := interpret_expr world loc e
+                                                       (callset_descend_return E CallOk)
+                in (world', loc, match result with
+                                 | ExprSuccess value => StmtReturnFromFunction value
+                                 | ExprAbort ab => StmtAbort ab
+                                 end)
+           | Raise e => fun E =>
+                let (world', result) := interpret_expr world loc e
+                                                       (callset_descend_raise E CallOk)
+                in (world', loc, StmtAbort (match result with
+                                            | ExprSuccess value => AbortException value
+                                            | ExprAbort ab => ab
+                                            end))
+           | Assert cond maybe_e => fun E =>
+                let (world', result_cond) := interpret_expr world loc cond
+                                                            (callset_descend_assert_cond E CallOk)
+                in match result_cond with
+                   | ExprAbort ab => (world', loc, StmtAbort ab)
+                   | ExprSuccess value =>
+                      if (Z_of_uint256 value =? 0)%Z
+                        then match maybe_e as maybe_e' return maybe_e = maybe_e' -> _ with
+                             | None => fun _ => (world', loc, StmtAbort (AbortException zero256))
+                             | Some e => fun Ee =>
+                                let (world'', result_e) := interpret_expr world loc e
+                                                           (callset_descend_assert_error E Ee CallOk)
+                                in match result_e with
+                                   | ExprSuccess value =>
+                                                      (world'', loc, StmtAbort (AbortException value))
+                                   | ExprAbort ab => (world'', loc, StmtAbort ab)
+                                   end
+                             end eq_refl
+                        else (world', loc, StmtSuccess)
+                   end
+           | Assign lhs rhs => fun E =>
+                let (world', result) := interpret_expr world loc rhs
+                                                       (callset_descend_assign_rhs E CallOk)
+                in do_assign world' loc lhs result
+           | BinOpAssign lhs op rhs => fun E =>
+                let (world', result) := interpret_expr world loc rhs
+                                        (callset_descend_binop_assign_rhs E CallOk)
+                in do_binop_assign world' loc lhs op result
+           | ExprStmt e => fun E =>
+                           let (world', result) := interpret_expr world loc e
+                                                   (callset_descend_expr_stmt E CallOk)
+                           in (world', loc, match result with
+                                            | ExprSuccess a => StmtSuccess
+                                            | ExprAbort ab => StmtAbort ab
+                                            end)
+           end eq_refl
+(*     in let interpret_stmt_list
+        := fix interpret_stmt_list (world: world_state)
+                                   (loc: string_map uint256)
+                                   (allowed_calls: string_set)
+                                   (stmts: stmt)
+                                   (CallOk: let _ := string_set_impl in 
+                                            FSet.is_subset (stmt_list_callset s) allowed_calls = true)
+           : world_state * string_map uint256 * stmt_result uint256
+           := match stmts as stmts' return stmts = stmts' -> _ with
+              | nil => fun _ => StmtSuccess zero256
+              | h :: t => fun E =>
+                  (if is_local_var_decl h as h_is_var_decl return _ = h_is_var_decl -> _
+                     then fun Evar =>
+                       let (name, init) := var_decl_unpack h Evar in
+                       match Map.lookup loc name with
+                       | 
+                       match init with
+                       | None => let loc := Map.insert 
+                       | Some init_expr => 
+                       end
+                     else fun Evar =>) eq_refl
+              end eq_refl.
      := fix interpret_stmt (world: world_state)
                            (loc: string_map uint256)
                            (return_type: Type)
@@ -356,7 +512,8 @@ Fixpoint interpret_call {call_depth_bound: nat}
                            (CallOk: let _ := string_set_impl in 
                                     FSet.is_subset (stmt_callset s) allowed_calls = true)
         : world_state * string_map uint256 * stmt_result return_type
-        := let interpret_loop := fix interpret_loop
+        := (* let interpret_loop 
+           := fix interpret_loop *)
            match s as s' return s = s' -> _ with
            | SmallStmt ss => interpret_small_stmt XXXX
            | LocalVarDecl _ _ => False_rect _ _
@@ -370,10 +527,17 @@ Fixpoint interpret_call {call_depth_bound: nat}
    in match fun_decl fc as d return _ = d -> _ with
       | FunDecl _ arg_names body => fun E =>
           match bind_args arg_names arg_values with
-          | inl err => (world, ExprError err)
-          | inr loc => interpret_expr world loc body (interpret_call_helper E)
+          | inl err => (world, expr_error err)
+          | inr loc =>
+              let '(world', loc', result) := interpret_small_stmt world loc body 
+                                                                  (interpret_call_helper E)
+              in (world', match result with
+                          | StmtSuccess => ExprSuccess zero256
+                          | StmtReturnFromFunction x => ExprSuccess x
+                          | StmtAbort a => ExprAbort a
+                          end)
           end
-      | _ => fun _ => (world, ExprError "a declaration is found but it's not a function")
+      | _ => fun _ => (world, expr_error "a declaration is found but it's not a function")
       end eq_refl.
 
 Local Lemma make_fun_ctx_helper {cd: calldag}
@@ -414,7 +578,7 @@ Definition interpret (cd: calldag)
                      (arg_values: list uint256)
 : world_state * expr_result uint256
 := match make_fun_ctx_and_bound cd function_name with
-   | None => (world, ExprError "declaration not found")
+   | None => (world, expr_error "declaration not found")
    | Some (existT _ bound fc) => interpret_call fc world arg_values
    end.
 

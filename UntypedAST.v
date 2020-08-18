@@ -81,7 +81,7 @@ Inductive decl
       InterfaceDecl
       StructDecl *)
   StorageVarDecl (name: string)
-| FunDecl (name: string) (args: list string) (body: expr). (* body: list stmt *)
+| FunDecl (name: string) (args: list string) (body: small_stmt). (* XXX *)
 
 Definition decl_name (d: decl)
 : string

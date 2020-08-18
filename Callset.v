@@ -86,7 +86,7 @@ Qed.
 Definition decl_callset (d: decl)
 := let _ := string_set_impl in match d with
    | StorageVarDecl _ => empty
-   | FunDecl name args body => (* XXX stmt_list_callset *) expr_callset body
+   | FunDecl name args body => (* stmt_list_callset *) small_stmt_callset body
    end.
 
 Lemma callset_descend_unop {e a: expr} {op: unop}
@@ -249,6 +249,85 @@ Lemma callset_descend_or_right {a b e: expr}
                                     FSet.is_subset (expr_callset e) allowed_calls = true):
   let _ := string_set_impl in
   FSet.is_subset (expr_callset b) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_return {s: small_stmt} {e: expr}
+                             {allowed_calls: string_set}
+                             (E: s = Return (Some e))
+                             (ok: let _ := string_set_impl in
+                                  FSet.is_subset (small_stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset e) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_raise {s: small_stmt} {e: expr}
+                            {allowed_calls: string_set}
+                            (E: s = Raise e)
+                            (ok: let _ := string_set_impl in
+                                 FSet.is_subset (small_stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset e) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_expr_stmt {s: small_stmt} {e: expr}
+                                {allowed_calls: string_set}
+                                (E: s = ExprStmt e)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (small_stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset e) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_assert_cond {s: small_stmt} {cond: expr} {maybe_e: option expr}
+                                  {allowed_calls: string_set}
+                                  (E: s = Assert cond maybe_e)
+                                  (ok: let _ := string_set_impl in
+                                       FSet.is_subset (small_stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset cond) allowed_calls = true.
+Proof.
+subst. cbn in *. destruct maybe_e; cbn in ok; descend ok.
+Qed.
+
+Lemma callset_descend_assert_error {s: small_stmt} {cond e: expr} {maybe_e: option expr}
+                                   {allowed_calls: string_set}
+                                   (E: s = Assert cond maybe_e)
+                                   (Ee: maybe_e = Some e)
+                                   (ok: let _ := string_set_impl in
+                                        FSet.is_subset (small_stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset e) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_assign_rhs {s: small_stmt} {lhs: assignable} {rhs: expr}
+                                 {allowed_calls: string_set}
+                                 (E: s = Assign lhs rhs)
+                                 (ok: let _ := string_set_impl in
+                                      FSet.is_subset (small_stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset rhs) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_binop_assign_rhs {s: small_stmt} {lhs: assignable} {rhs: expr}
+                                       {allowed_calls: string_set}
+                                       {op: binop}
+                                       (E: s = BinOpAssign lhs op rhs)
+                                       (ok: let _ := string_set_impl in
+                                            FSet.is_subset (small_stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset rhs) allowed_calls = true.
 Proof.
 descend ok.
 Qed.
