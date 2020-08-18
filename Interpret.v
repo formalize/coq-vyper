@@ -1,15 +1,15 @@
-From Coq Require Import String Arith NArith.
+From Coq Require Import String Arith NArith ZArith.
 Require Import Config UntypedAST Callset.
-Require FSet Map.
+Require FSet Map UInt256.
 
 Local Open Scope list_scope.
 Local Open Scope string_scope.
 
-Inductive expr_result {C: VyperConfig} (result_type: Type)
-:= ExprSuccess (result: result_type)
+Inductive expr_result (type: Type)
+:= ExprSuccess (value: type)
  | ExprError (msg: string).
-Arguments ExprSuccess {_ _}.
-Arguments ExprError {_ _}.
+Arguments ExprSuccess {type}.
+Arguments ExprError {type}.
 
 Inductive stmt_abort (return_type: Type)
 := AbortError (msg: string)
@@ -29,15 +29,19 @@ Inductive stmt_result (return_type: Type)
 Arguments StmtSuccess {_}.
 Arguments StmtAbort {_}.
 
-(** XXX *)
 Definition interpret_unop (op: unop) (a: uint256)
 : expr_result uint256
-:= ExprSuccess a.
+:= match UInt256.interpret_unop op a with
+   | Some result => ExprSuccess result
+   | None => ExprError "arithmetic error"
+   end.
 
-(** XXX *)
 Definition interpret_binop (op: binop) (a b: uint256)
 : expr_result uint256
-:= ExprSuccess a.
+:= match UInt256.interpret_binop op a b with
+   | Some result => ExprSuccess result
+   | None => ExprError "arithmetic error"
+   end.
 
 Record calldag := {
   cd_declmap:  string -> option decl;
@@ -170,17 +174,17 @@ Qed.
   The max stack depth bound is reduced by 1.
  *)
 Definition fun_ctx_descend {call_depth_bound new_call_depth_bound}
-                           {cd : calldag}
-                           {e : expr}
-                           {name : string}
-                           {args : list expr}
+                           {cd: calldag}
+                           {e: expr}
+                           {name: string}
+                           {args: list expr}
 
                            (fc: fun_ctx cd call_depth_bound)
-                           (CallOk : let _ := string_set_impl in
+                           (CallOk: let _ := string_set_impl in
                                        FSet.is_subset (expr_callset e)
                                                       (decl_callset (fun_decl fc))
                                         = true)
-                           (Ebound : call_depth_bound = S new_call_depth_bound)
+                           (Ebound: call_depth_bound = S new_call_depth_bound)
                            (E: e = PrivateOrBuiltinCall name args)
 : option (fun_ctx cd new_call_depth_bound)
 := match cd_declmap cd name as maybe_decl return _ = maybe_decl -> _ with
@@ -205,6 +209,12 @@ Definition fun_ctx_descend {call_depth_bound new_call_depth_bound}
    end eq_refl.
 
 (*************************************************************************************************)
+
+Definition stmt_is_local_var_decl {C: VyperConfig} (s: stmt)
+:= match s with
+   | LocalVarDecl _ _ => true
+   | _ => false
+   end.
 
 Fixpoint interpret_call {call_depth_bound: nat}
                         {cd: calldag}
@@ -287,8 +297,40 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                     | ExprSuccess y => interpret_binop op x y
                                     end)
                      end
-                 (* | IfThenElse cond yes no => fun E =>
-                     _ *)
+                 | IfThenElse cond yes no => fun E =>
+                     let (world', result_cond) := interpret_expr world loc cond
+                                                                 (callset_descend_if_cond E CallOk)
+                     in match result_cond with
+                        | ExprError msg => (world', result_cond)
+                        | ExprSuccess cond_value =>
+                            if (Z_of_uint256 cond_value =? 0)%Z
+                              then interpret_expr world' loc no
+                                                  (callset_descend_if_else E CallOk)
+                              else interpret_expr world' loc yes
+                                                  (callset_descend_if_then E CallOk)
+                        end
+                 | LogicalAnd a b => fun E =>
+                     let (world', result_a) := interpret_expr world loc a
+                                                              (callset_descend_and_left E CallOk)
+                     in match result_a with
+                        | ExprError msg => (world', result_a)
+                        | ExprSuccess a_value =>
+                            if (Z_of_uint256 a_value =? 0)%Z
+                              then (world', result_a)
+                              else interpret_expr world' loc b
+                                                  (callset_descend_and_right E CallOk)
+                        end
+                 | LogicalOr a b => fun E =>
+                     let (world', result_a) := interpret_expr world loc a
+                                                              (callset_descend_or_left E CallOk)
+                     in match result_a with
+                        | ExprError msg => (world', result_a)
+                        | ExprSuccess a_value =>
+                            if (Z_of_uint256 a_value =? 0)%Z
+                              then interpret_expr world' loc b
+                                                  (callset_descend_or_right E CallOk)
+                              else (world', result_a)
+                        end
                  | PrivateOrBuiltinCall name args => fun E =>
                      let (world', result_args) :=
                        interpret_expr_list world loc args
@@ -304,6 +346,27 @@ Fixpoint interpret_call {call_depth_bound: nat}
                         end
                  end eq_refl
          end eq_refl
+ (*  in let interpret_stmt 
+     := fix interpret_stmt (world: world_state)
+                           (loc: string_map uint256)
+                           (return_type: Type)
+                           (allowed_calls: string_set)
+                           (s: stmt)
+                           (NotVarDecl: stmt_is_local_var_decl s = false)
+                           (CallOk: let _ := string_set_impl in 
+                                    FSet.is_subset (stmt_callset s) allowed_calls = true)
+        : world_state * string_map uint256 * stmt_result return_type
+        := let interpret_loop := fix interpret_loop
+           match s as s' return s = s' -> _ with
+           | SmallStmt ss => interpret_small_stmt XXXX
+           | LocalVarDecl _ _ => False_rect _ _
+           | IfElseStmt cond yes no =>
+              let (world', result_cond) := interpret_expr XXXXX
+           | FixedRangeLoop var start stop body =>
+              (* Range checks *)
+           | FixedCountLoop var start count body =>
+              (* Range checks *)
+           end eq_refl *)
    in match fun_decl fc as d return _ = d -> _ with
       | FunDecl _ arg_names body => fun E =>
           match bind_args arg_names arg_values with
@@ -356,13 +419,6 @@ Definition interpret (cd: calldag)
    end.
 
 (*
-Definition stmt_is_local_var_decl {C: VyperConfig} (s: stmt)
-:= match s with
-   | LocalVarDecl _ _ => true
-   | _ => false
-   end.
-
-
 Fixpoint interpret_stmt {C: VyperConfig}
                         (CALL_depth_bound: nat)
                         (call_depth_bound: nat)

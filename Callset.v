@@ -12,8 +12,10 @@ Fixpoint expr_callset (e: expr)
    match e with
    | Const _ | LocalVar _ | StorageVar _ => empty
    | UnOp _ a => expr_callset a
-   | BinOp _ a b => union (expr_callset a) (expr_callset b)
-(*   | IfThenElse a b c => union (expr_callset a) (union (expr_callset b) (expr_callset c)) *)
+   | BinOp _ a b
+   | LogicalOr a b
+   | LogicalAnd a b => union (expr_callset a) (expr_callset b)
+   | IfThenElse a b c => union (expr_callset a) (union (expr_callset b) (expr_callset c))
    | PrivateOrBuiltinCall name args =>
       let expr_list_callset := fix expr_list_callset (exprs: list expr) :=
          match exprs with
@@ -68,6 +70,12 @@ Fixpoint stmt_list_callset (stmts: list stmt)
 Definition stmt_list_callset' (stmts: list stmt)
 := let _ := string_set_impl in fold_right union empty (map stmt_callset stmts).
 
+Ltac descend H 
+:= subst; cbn in H;
+   repeat try rewrite union_subset_and in H;
+   repeat rewrite Bool.andb_true_iff in H;
+   try tauto.
+
 Lemma stmt_list_callset_alt (s: list stmt):
   stmt_list_callset s = stmt_list_callset' s.
 Proof.
@@ -89,7 +97,7 @@ Lemma callset_descend_unop {e a: expr} {op: unop}
   let _ := string_set_impl in
   FSet.is_subset (expr_callset a) allowed_calls = true.
 Proof.
-subst e. apply ok.
+descend ok.
 Qed.
 
 Lemma callset_descend_binop_left {e a b: expr} {op: binop}
@@ -99,9 +107,8 @@ Lemma callset_descend_binop_left {e a b: expr} {op: binop}
                                       FSet.is_subset (expr_callset e) allowed_calls = true):
   let _ := string_set_impl in
   FSet.is_subset (expr_callset a) allowed_calls = true.
-Proof. 
-subst e. cbn in ok.
-apply (FSet.is_subset_trans (FSet.union_subset_l _ _) ok).
+Proof.
+descend ok.
 Qed.
 
 Lemma callset_descend_binop_right {e a b: expr} {op: binop}
@@ -111,9 +118,8 @@ Lemma callset_descend_binop_right {e a b: expr} {op: binop}
                                        FSet.is_subset (expr_callset e) allowed_calls = true):
   let _ := string_set_impl in
   FSet.is_subset (expr_callset b) allowed_calls = true.
-Proof. 
-subst e. cbn in ok.
-apply (FSet.is_subset_trans (FSet.union_subset_r _ _) ok).
+Proof.
+descend ok.
 Qed.
 
 Lemma callset_leaf {e: expr} {name: string} {args: list expr}
@@ -155,9 +161,8 @@ Lemma callset_descend_head {h: expr} {t e: list expr}
                            FSet.is_subset (expr_list_callset e) allowed_calls = true):
   let _ := string_set_impl in
   FSet.is_subset (expr_callset h) allowed_calls = true.
-Proof. 
-subst e. cbn in ok.
-apply (FSet.is_subset_trans (FSet.union_subset_l _ _) ok).
+Proof.
+descend ok.
 Qed.
 
 Lemma callset_descend_tail {h: expr} {t e: list expr}
@@ -167,10 +172,85 @@ Lemma callset_descend_tail {h: expr} {t e: list expr}
                            FSet.is_subset (expr_list_callset e) allowed_calls = true):
   let _ := string_set_impl in
   FSet.is_subset (expr_list_callset t) allowed_calls = true.
-Proof. 
-subst e. cbn in ok.
-apply (FSet.is_subset_trans (FSet.union_subset_r _ _) ok).
+Proof.
+descend ok.
 Qed.
 
+Lemma callset_descend_if_cond {cond yes no e: expr}
+                              {allowed_calls: string_set}
+                              (E: e = IfThenElse cond yes no)
+                              (ok: let _ := string_set_impl in
+                                   FSet.is_subset (expr_callset e) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset cond) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_if_then {cond yes no e: expr}
+                              {allowed_calls: string_set}
+                              (E: e = IfThenElse cond yes no)
+                              (ok: let _ := string_set_impl in
+                                   FSet.is_subset (expr_callset e) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset yes) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_if_else {cond yes no e: expr}
+                              {allowed_calls: string_set}
+                              (E: e = IfThenElse cond yes no)
+                              (ok: let _ := string_set_impl in
+                                   FSet.is_subset (expr_callset e) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset no) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_and_left {a b e: expr}
+                               {allowed_calls: string_set}
+                               (E: e = LogicalAnd a b)
+                               (ok: let _ := string_set_impl in
+                                    FSet.is_subset (expr_callset e) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset a) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_and_right {a b e: expr}
+                                {allowed_calls: string_set}
+                                (E: e = LogicalAnd a b)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (expr_callset e) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset b) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_or_left {a b e: expr}
+                              {allowed_calls: string_set}
+                              (E: e = LogicalOr a b)
+                              (ok: let _ := string_set_impl in
+                                   FSet.is_subset (expr_callset e) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset a) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_or_right {a b e: expr}
+                               {allowed_calls: string_set}
+                               (E: e = LogicalOr a b)
+                               (ok: let _ := string_set_impl in
+                                    FSet.is_subset (expr_callset e) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset b) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
 
 End Callset.

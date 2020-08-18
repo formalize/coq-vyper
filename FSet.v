@@ -664,6 +664,50 @@ rewrite union_ok.
 destruct has; now destruct has.
 Qed.
 
+Lemma union_subset_and (a b c: S):
+  is_subset (union a b) c = is_subset a c && is_subset b c.
+Proof.
+remember (is_subset a c) as ac. symmetry in Heqac.
+remember (is_subset b c) as bc. symmetry in Heqbc.
+destruct ac.
+{ (* ac = true *)
+  rewrite is_subset_ok in Heqac.
+  rewrite andb_true_l.
+  destruct bc.
+  { (* bc = true *)
+    rewrite is_subset_ok in Heqbc.
+    rewrite is_subset_ok.
+    intro x. assert (ACx := Heqac x). assert (BCx := Heqbc x).
+    rewrite union_ok.
+    destruct has; now destruct has.
+  }
+  (* bc = false *)
+  remember (is_subset (union a b) c) as f. symmetry in Heqf.
+  destruct f. 2:trivial.
+  rewrite is_subset_ok in Heqf.
+  enough (is_subset b c = true). { rewrite Heqbc in *. symmetry. assumption. }
+  rewrite is_subset_ok.
+  intro x. assert (ACx := Heqac x). assert (Fx := Heqf x).
+  rewrite union_ok in Fx.
+  destruct has; destruct has; 
+    try rewrite orb_true_r in *; 
+    try rewrite orb_false_r in *; trivial.
+  discriminate.
+}
+(* ac = false *)
+rewrite andb_false_l.
+remember (is_subset (union a b) c) as f. symmetry in Heqf.
+destruct f. 2:trivial.
+rewrite is_subset_ok in Heqf.
+enough (is_subset a c = true). { rewrite Heqac in *. symmetry. assumption. }
+rewrite is_subset_ok.
+intro x. assert (Fx := Heqf x).
+rewrite union_ok in Fx.
+destruct has; destruct has;
+  try rewrite orb_true_r in *;
+  try repeat rewrite orb_false_r in *; trivial.
+Qed.
+
 Lemma inter_subset_l (a b: S):
   is_subset (inter a b) a = true.
 Proof.

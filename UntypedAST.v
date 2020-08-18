@@ -7,18 +7,18 @@ Inductive unop
  | Neg.
 
 Inductive binop
-:= LogicalOr
- | LogicalAnd
+:= (* LogicalOr
+ | LogicalAnd *)
  | Lt
  | Le
  | Gt
  | Ge
  | Eq
  | Ne
- | In
+(* | In
  | NotIn
  | Is
- | IsNot
+ | IsNot *)
  | BitwiseOr
  | BitwiseAnd
  | BitwiseXor
@@ -27,7 +27,7 @@ Inductive binop
  | Add
  | Sub
  | Mul
- | Div
+(* | Div *)
  | Quot
  | Mod
  | Pow.
@@ -46,7 +46,9 @@ Inductive expr
  | StorageVar (name: string) (* self.x *)
  | UnOp (op: unop) (a: expr)
  | BinOp (op: binop) (a b: expr)
-(* | IfThenElse (cond yes no: expr) *)
+ | IfThenElse (cond yes no: expr)
+ | LogicalAnd (a b: expr)
+ | LogicalOr (a b: expr)
  | PrivateOrBuiltinCall (name: string) (args: list expr).
 
 (** "Small statement" is a term used in Python grammar, also in rust-vyper grammar.
