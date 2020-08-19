@@ -72,9 +72,8 @@ Inductive stmt
 := SmallStmt (s: small_stmt)
  | LocalVarDecl (name: string) (init: option expr)
  | IfElseStmt (cond: expr) (yes: list stmt) (no: option (list stmt))
-(*
  | FixedRangeLoop (var: string) (start: option uint256) (stop: uint256) (body: list stmt)
- | FixedCountLoop (var: string) (start: expr) (count: uint256) (body: list stmt) *).
+ | FixedCountLoop (var: string) (start: expr) (count: uint256) (body: list stmt).
 
 Inductive decl
 := (* ImportDecl

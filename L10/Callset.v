@@ -1,5 +1,5 @@
 From Coq Require Import List String.
-Require Import FSet Config UntypedAST.
+Require Import FSet Config L10.AST.
 
 Section Callset.
 
@@ -56,9 +56,8 @@ Fixpoint stmt_callset (s: stmt)
    | IfElseStmt cond yes None => union (expr_callset cond) (stmt_list_callset yes)
    | IfElseStmt cond yes (Some no) => union (expr_callset cond)
                                             (union (stmt_list_callset yes) (stmt_list_callset no))
-(*
    | FixedRangeLoop var start _ body => stmt_list_callset body
-   | FixedCountLoop var start _ body => union (expr_callset start) (stmt_list_callset body) *)
+   | FixedCountLoop var start _ body => union (expr_callset start) (stmt_list_callset body)
    end.
 
 Fixpoint stmt_list_callset (stmts: list stmt)
@@ -414,7 +413,7 @@ Lemma callset_descend_stmt_tail {stmts tail: list stmt} {head: stmt}
 Proof.
 descend ok.
 Qed.
-(*
+
 Lemma callset_descend_fixed_range_loop_body {s: stmt} {body: list stmt} {var start stop}
                                             {allowed_calls: string_set}
                                             (E: s = FixedRangeLoop var start stop body)
@@ -447,5 +446,5 @@ Lemma callset_descend_fixed_count_loop_start {s: stmt} {body: list stmt} {var st
 Proof.
 descend ok.
 Qed.
-*)
+
 End Callset.

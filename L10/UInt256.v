@@ -1,5 +1,5 @@
 From Coq Require Import ZArith.
-Require Import Config UntypedAST.
+Require Import Config L10.AST.
 
 Definition interpret_unop {C: VyperConfig} (op: unop) (a: uint256)
 : option uint256

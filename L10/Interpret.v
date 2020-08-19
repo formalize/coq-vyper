@@ -1,5 +1,5 @@
 From Coq Require Import String Arith NArith ZArith.
-Require Import Config UntypedAST Callset.
+Require Import Config L10.AST L10.Callset.
 Require FSet Map UInt256.
 
 Local Open Scope list_scope.
@@ -534,54 +534,6 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                 | _ => (world', loc', result)
                                 end) eq_refl
                     end eq_refl
-          in let interpret_loop_rec
-             :=  fix interpret_loop_rec (world: world_state)
-                                        (loc: string_map uint256)
-                                        (body: list stmt)
-                                        (cursor: Z)
-                                        (countdown: nat)
-                                        (name: string)
-                                        (CallOk: let _ := string_set_impl in 
-                                                 FSet.is_subset (stmt_list_callset body)
-                                                                (decl_callset (fun_decl fc)) = true)
-                  {struct countdown}
-                  : world_state * string_map uint256 * stmt_result uint256
-                  := match countdown with
-                     | O => (world, loc, StmtSuccess)
-                     | S new_countdown =>
-                           let loc' := map_insert loc name (uint256_of_Z cursor) in
-                           let '(world', loc'', result) := interpret_stmt_list world loc' body CallOk
-                           in match result with
-                              | StmtSuccess | StmtAbort AbortContinue =>
-                                  interpret_loop_rec world' loc'' body
-                                                     (Z.succ cursor) new_countdown name CallOk
-                              | StmtAbort AbortBreak => (world', loc'', StmtSuccess)
-                              | _ => (world', loc'', result)
-                              end
-                     end
-           in let interpret_loop (world: world_state)
-                                 (loc: string_map uint256)
-                                 (body: list stmt)
-                                 (start: uint256)
-                                 (stop: Z)
-                                 (name: string)
-                                 (CallOk: let _ := string_set_impl in 
-                                          FSet.is_subset (stmt_list_callset body)
-                                                         (decl_callset (fun_decl fc)) = true)
-                 : world_state * string_map uint256 * stmt_result uint256
-                 := match map_lookup loc name with
-                    | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
-                    | None => if (Z_of_uint256 (uint256_of_Z stop) =? stop)%Z
-                                then let cursor := Z_of_uint256 start in
-                                     if (cursor <? stop)%Z
-                                       then let '(world', loc', result) :=
-                                                   interpret_loop_rec world loc body cursor
-                                                                      (Z.to_nat (stop - cursor)%Z)
-                                                                      name CallOk
-                                            in (world', map_remove loc' name, result)
-                                       else (world, loc, StmtSuccess)
-                                else (world, loc, StmtAbort (AbortError "loop range overflows"))
-                    end
           in match s as s' return s = s' -> _ with
           | SmallStmt ss => fun E => interpret_small_stmt world loc ss
                                                  (callset_descend_small_stmt E CallOk)
@@ -604,24 +556,90 @@ Fixpoint interpret_call {call_depth_bound: nat}
                        else interpret_stmt_list world' loc yes
                                                 (callset_descend_stmt_if_then E CallOk)
                  end
-       (*   | FixedRangeLoop var start stop fr_body => fun E =>
-              interpret_loop world loc fr_body (match start with
-                                                | Some x => x
-                                                | None => zero256
-                                                end)
-                             (Z_of_uint256 stop) var
-                             (callset_descend_fixed_range_loop_body E CallOk)
-          | FixedCountLoop var start count fc_body => fun E =>
-              let (world', result_start) :=
-                    interpret_expr world loc start
-                                   (callset_descend_fixed_count_loop_start E CallOk)
-              in match result_start with
-                 | ExprAbort ab => (world', loc, StmtAbort ab)
-                 | ExprSuccess start_value =>
-                      interpret_loop world' loc fc_body start_value
-                             (Z_of_uint256 start_value + Z_of_uint256 count)%Z
-                             var (callset_descend_fixed_count_loop_body E CallOk)
-                 end *)
+          | FixedRangeLoop var start stop body => fun E =>
+             let interpret_loop_rec
+             :=  fix interpret_loop_rec (world: world_state)
+                                        (loc: string_map uint256)
+                                        (cursor: Z)
+                                        (countdown: nat)
+                  {struct countdown}
+                  : world_state * string_map uint256 * stmt_result uint256
+                  := match countdown with
+                     | O => (world, loc, StmtSuccess)
+                     | S new_countdown =>
+                           let loc' := map_insert loc var (uint256_of_Z cursor) in
+                           let '(world', loc'', result) :=
+                                  interpret_stmt_list world loc' body
+                                                      (callset_descend_fixed_range_loop_body E CallOk)
+                           in match result with
+                              | StmtSuccess | StmtAbort AbortContinue =>
+                                  interpret_loop_rec world' loc''
+                                                     (Z.succ cursor) new_countdown
+                              | StmtAbort AbortBreak => (world', loc'', StmtSuccess)
+                              | _ => (world', loc'', result)
+                              end
+                     end
+             in let start_z := match start with
+                               | Some x => Z_of_uint256 x
+                               | None => 0%Z
+                               end
+             in let stop_z := Z_of_uint256 stop in
+             match map_lookup loc var with
+             | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
+             | None => if (stop_z <=? start_z)%Z
+                         then (* ... with STOP being a greater value than START ...
+                                 https://vyper.readthedocs.io/en/stable/control-structures.html#for-loops
+                              *)
+                              (world, loc, StmtAbort (AbortError "empty fixed range loop"))
+                         else let '(world', loc', result) :=
+                                     interpret_loop_rec world loc start_z
+                                                        (Z.to_nat (stop_z - start_z)%Z)
+                              in (world', map_remove loc' var, result)
+             end
+          | FixedCountLoop var start count body => fun E =>
+             let interpret_loop_rec (* almost dup from FixedRangeLoop branch *)
+             :=  fix interpret_loop_rec (world: world_state)
+                                        (loc: string_map uint256)
+                                        (cursor: Z)
+                                        (countdown: nat)
+                  {struct countdown}
+                  : world_state * string_map uint256 * stmt_result uint256
+                  := match countdown with
+                     | O => (world, loc, StmtSuccess)
+                     | S new_countdown =>
+                           let loc' := map_insert loc var (uint256_of_Z cursor) in
+                           let '(world', loc'', result) :=
+                                  interpret_stmt_list world loc' body
+                                                      (callset_descend_fixed_count_loop_body E CallOk)
+                           in match result with
+                              | StmtSuccess | StmtAbort AbortContinue =>
+                                  interpret_loop_rec world' loc''
+                                                     (Z.succ cursor) new_countdown
+                              | StmtAbort AbortBreak => (world', loc'', StmtSuccess)
+                              | _ => (world', loc'', result)
+                              end
+                     end
+              in match map_lookup loc var with
+                 | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
+                 | None => let (world', result_start) :=
+                              interpret_expr world loc start
+                                             (callset_descend_fixed_count_loop_start E CallOk)
+                           in match result_start with
+                           | ExprAbort ab => (world', loc, StmtAbort ab)
+                           | ExprSuccess start_value =>
+                               let count_z := Z_of_uint256 count in
+                               let count_nat := Z.to_nat count_z in
+                               let start_z := Z_of_uint256 start_value in
+                               let last := (start_z + count_z - 1)%Z in
+                               if (Z_of_uint256 (uint256_of_Z last) =? last)%Z
+                                 then
+                                   let '(world', loc', result) :=
+                                     interpret_loop_rec
+                                       world' loc start_z count_nat
+                                   in (world', map_remove loc var, result)
+                                 else (world, loc, StmtAbort (AbortError "loop range overflows"))
+                           end
+                 end
           end eq_refl
    in match fun_decl fc as d return _ = d -> _ with
       | FunDecl _ arg_names body => fun E =>
