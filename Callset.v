@@ -56,8 +56,9 @@ Fixpoint stmt_callset (s: stmt)
    | IfElseStmt cond yes None => union (expr_callset cond) (stmt_list_callset yes)
    | IfElseStmt cond yes (Some no) => union (expr_callset cond)
                                             (union (stmt_list_callset yes) (stmt_list_callset no))
-   | FixedRangeLoop var start _ body | FixedCountLoop var start _ body =>
-       stmt_list_callset body
+(*
+   | FixedRangeLoop var start _ body => stmt_list_callset body
+   | FixedCountLoop var start _ body => union (expr_callset start) (stmt_list_callset body) *)
    end.
 
 Fixpoint stmt_list_callset (stmts: list stmt)
@@ -332,4 +333,119 @@ Proof.
 descend ok.
 Qed.
 
+Lemma callset_descend_small_stmt {s: stmt} {ss: small_stmt}
+                                 {allowed_calls: string_set}
+                                 (E: s = SmallStmt ss)
+                                 (ok: let _ := string_set_impl in
+                                      FSet.is_subset (stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (small_stmt_callset ss) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_stmt_if_cond {cond: expr} {yes: list stmt} {no: option (list stmt)} {s: stmt}
+                                   {allowed_calls: string_set}
+                                   (E: s = IfElseStmt cond yes no)
+                                   (ok: let _ := string_set_impl in
+                                        FSet.is_subset (stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset cond) allowed_calls = true.
+Proof.
+destruct no; descend ok.
+Qed.
+
+Lemma callset_descend_stmt_if_then {cond: expr} {yes: list stmt} {no: option (list stmt)} {s: stmt}
+                                   {allowed_calls: string_set}
+                                   (E: s = IfElseStmt cond yes no)
+                                   (ok: let _ := string_set_impl in
+                                        FSet.is_subset (stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_list_callset yes) allowed_calls = true.
+Proof.
+destruct no; descend ok.
+Qed.
+
+Lemma callset_descend_stmt_if_else {cond: expr} {yes no: list stmt}
+                                   {maybe_no: option (list stmt)} {s: stmt}
+                                   {allowed_calls: string_set}
+                                   (E: s = IfElseStmt cond yes maybe_no)
+                                   (Eno: maybe_no = Some no)
+                                   (ok: let _ := string_set_impl in
+                                        FSet.is_subset (stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_list_callset no) allowed_calls = true.
+Proof.
+subst. cbn in *. descend ok.
+Qed.
+
+Lemma callset_descend_init_expr {stmts t: list stmt} {s: stmt} {init: expr}
+                                {allowed_calls: string_set}
+                                (E: stmts = s :: t)
+                                (Evar: is_local_var_decl s = true)
+                                (Einit: snd (var_decl_unpack s Evar) = Some init)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (stmt_list_callset stmts) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset init) allowed_calls = true.
+Proof.
+cbn in *. destruct s; cbn in Evar; try discriminate.
+cbn in *. subst. descend ok.
+Qed.
+
+Lemma callset_descend_stmt_head {stmts tail: list stmt} {head: stmt}
+                                {allowed_calls: string_set}
+                                (E: stmts = head :: tail)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (stmt_list_callset stmts) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_callset head) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_stmt_tail {stmts tail: list stmt} {head: stmt}
+                                {allowed_calls: string_set}
+                                (E: stmts = head :: tail)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (stmt_list_callset stmts) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_list_callset tail) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+(*
+Lemma callset_descend_fixed_range_loop_body {s: stmt} {body: list stmt} {var start stop}
+                                            {allowed_calls: string_set}
+                                            (E: s = FixedRangeLoop var start stop body)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_list_callset body) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_fixed_count_loop_body {s: stmt} {body: list stmt} {var start stop}
+                                            {allowed_calls: string_set}
+                                            (E: s = FixedCountLoop var start stop body)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_list_callset body) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+
+Lemma callset_descend_fixed_count_loop_start {s: stmt} {body: list stmt} {var start count}
+                                             {allowed_calls: string_set}
+                                             (E: s = FixedCountLoop var start count body)
+                                (ok: let _ := string_set_impl in
+                                     FSet.is_subset (stmt_callset s) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (expr_callset start) allowed_calls = true.
+Proof.
+descend ok.
+Qed.
+*)
 End Callset.

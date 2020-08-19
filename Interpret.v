@@ -214,23 +214,6 @@ Definition fun_ctx_descend {call_depth_bound new_call_depth_bound}
 
 (*************************************************************************************************)
 
-Definition is_local_var_decl {C: VyperConfig} (s: stmt)
-:= match s with
-   | LocalVarDecl _ _ => true
-   | _ => false
-   end.
-
-Program Definition var_decl_unpack {C: VyperConfig} (s: stmt) (IsVarDecl: is_local_var_decl s = true)
-: string * option expr
-:= match s with
-   | LocalVarDecl name init => (name, init)
-   | _ => False_rect _ _
-   end.
-Next Obligation.
-destruct s; cbn in IsVarDecl; try discriminate.
-assert (Bad := H name init). tauto.
-Qed.
-
 Definition do_assign {return_type: Type} 
                      (world: world_state) (loc: string_map uint256)
                      (lhs: assignable)
@@ -286,6 +269,18 @@ Definition do_binop_assign {return_type: Type}
        end
    end.
 
+Definition map_lookup {Value} (m: string_map Value) := let _ := string_map_impl in Map.lookup m.
+Definition map_insert {Value} (m: string_map Value) := let _ := string_map_impl in Map.insert m.
+Definition map_remove {Value} (m: string_map Value) := let _ := string_map_impl in Map.remove m.
+
+Local Lemma var_decl_helper {s: stmt} {name init}
+                            (NotVarDecl: is_local_var_decl s = false)
+                            (E: s = LocalVarDecl name init):
+  False.
+Proof.
+now subst.
+Qed.
+
 Fixpoint interpret_call {call_depth_bound: nat}
                         {cd: calldag}
                         (fc: fun_ctx cd call_depth_bound)
@@ -336,13 +331,11 @@ Fixpoint interpret_call {call_depth_bound: nat}
                  match e as e' return e = e' -> _ with
                  | Const val => fun _ => (world, ExprSuccess val)
                  | LocalVar name => fun _ =>
-                     let _ := string_map_impl in
-                     (world, match Map.lookup loc name with
+                     (world, match map_lookup loc name with
                              | Some val => ExprSuccess val
                              | None => expr_error "Local variable not found"
                              end)
                  | StorageVar name => fun _ => 
-                     let _ := string_map_impl in
                      (world, match storage_lookup world name with
                              | Some val => ExprSuccess val
                              | None => expr_error "Storage variable not found"
@@ -420,8 +413,8 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                  (loc: string_map uint256)
                                  (s: small_stmt)
                                  (CallOk: let _ := string_set_impl in 
-                                          FSet.is_subset (small_stmt_callset s) 
-                                                         (decl_callset (fun_decl fc)) 
+                                          FSet.is_subset (small_stmt_callset s)
+                                                         (decl_callset (fun_decl fc))
                                            =
                                           true)
         : world_state * string_map uint256 * stmt_result uint256
@@ -481,49 +474,155 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                             | ExprAbort ab => StmtAbort ab
                                             end)
            end eq_refl
-(*     in let interpret_stmt_list
-        := fix interpret_stmt_list (world: world_state)
-                                   (loc: string_map uint256)
-                                   (allowed_calls: string_set)
-                                   (stmts: stmt)
-                                   (CallOk: let _ := string_set_impl in 
-                                            FSet.is_subset (stmt_list_callset s) allowed_calls = true)
+     in let interpret_stmt
+        := fix interpret_stmt (world: world_state)
+                              (loc: string_map uint256)
+                              (s: stmt)
+                              (NotVarDecl: is_local_var_decl s = false)
+                              (CallOk: let _ := string_set_impl in 
+                                       FSet.is_subset (stmt_callset s) 
+                                                      (decl_callset (fun_decl fc)) = true)
+           {struct s}
            : world_state * string_map uint256 * stmt_result uint256
-           := match stmts as stmts' return stmts = stmts' -> _ with
-              | nil => fun _ => StmtSuccess zero256
-              | h :: t => fun E =>
-                  (if is_local_var_decl h as h_is_var_decl return _ = h_is_var_decl -> _
-                     then fun Evar =>
-                       let (name, init) := var_decl_unpack h Evar in
-                       match Map.lookup loc name with
-                       | 
-                       match init with
-                       | None => let loc := Map.insert 
-                       | Some init_expr => 
-                       end
-                     else fun Evar =>) eq_refl
-              end eq_refl.
-     := fix interpret_stmt (world: world_state)
-                           (loc: string_map uint256)
-                           (return_type: Type)
-                           (allowed_calls: string_set)
-                           (s: stmt)
-                           (NotVarDecl: stmt_is_local_var_decl s = false)
-                           (CallOk: let _ := string_set_impl in 
-                                    FSet.is_subset (stmt_callset s) allowed_calls = true)
-        : world_state * string_map uint256 * stmt_result return_type
-        := (* let interpret_loop 
-           := fix interpret_loop *)
-           match s as s' return s = s' -> _ with
-           | SmallStmt ss => interpret_small_stmt XXXX
-           | LocalVarDecl _ _ => False_rect _ _
-           | IfElseStmt cond yes no =>
-              let (world', result_cond) := interpret_expr XXXXX
-           | FixedRangeLoop var start stop body =>
-              (* Range checks *)
-           | FixedCountLoop var start count body =>
-              (* Range checks *)
-           end eq_refl *)
+           := let interpret_stmt_list
+              := fix interpret_stmt_list (world: world_state)
+                                         (loc: string_map uint256)
+                                         (stmts: list stmt)
+                                         (CallOk: let _ := string_set_impl in 
+                                                  FSet.is_subset (stmt_list_callset stmts)
+                                                                 (decl_callset (fun_decl fc)) = true)
+                 {struct stmts}
+                 : world_state * string_map uint256 * stmt_result uint256
+                 := match stmts as stmts' return stmts = stmts' -> _ with
+                    | nil => fun _ => (world, loc, StmtSuccess)
+                    | h :: t => fun E =>
+                        (if is_local_var_decl h as h_is_var_decl return _ = h_is_var_decl -> _
+                           then fun Evar =>
+                             let name_init := var_decl_unpack h Evar in
+                             let name := fst name_init in
+                             let init := snd name_init in
+                             match map_lookup loc name with
+                             | Some _ => (world, loc, StmtAbort (AbortError "local variable already exists"))
+                             | None =>
+                                 match init as init' return init = init' -> _ with
+                                 | None => fun _ =>
+                                     let '(world', loc', result) :=
+                                       interpret_stmt_list world (map_insert loc name zero256) t
+                                                                 (callset_descend_stmt_tail E CallOk)
+                                     in (world', map_remove loc' name, result)
+                                 | Some init_expr => fun Einit =>
+                                     let '(world', result) := 
+                                            interpret_expr world loc init_expr
+                                                           (callset_descend_init_expr E Evar Einit CallOk)
+                                     in match result with
+                                        | ExprSuccess value =>
+                                            let '(world2, loc2, result2) :=
+                                              interpret_stmt_list world (map_insert loc name value) t
+                                                                  (callset_descend_stmt_tail E CallOk)
+                                            in (world2, map_remove loc2 name, result2)
+                                        | ExprAbort ab => (world', loc, StmtAbort ab)
+                                        end
+                                 end eq_refl
+                             end
+                           else fun Evar =>
+                             let '(world', loc', result) := 
+                               interpret_stmt world loc h Evar
+                                                    (callset_descend_stmt_head E CallOk)
+                             in match result with
+                                | StmtSuccess => interpret_stmt_list world' loc' t
+                                                                     (callset_descend_stmt_tail E CallOk)
+                                | _ => (world', loc', result)
+                                end) eq_refl
+                    end eq_refl
+          in let interpret_loop_rec
+             :=  fix interpret_loop_rec (world: world_state)
+                                        (loc: string_map uint256)
+                                        (body: list stmt)
+                                        (cursor: Z)
+                                        (countdown: nat)
+                                        (name: string)
+                                        (CallOk: let _ := string_set_impl in 
+                                                 FSet.is_subset (stmt_list_callset body)
+                                                                (decl_callset (fun_decl fc)) = true)
+                  {struct countdown}
+                  : world_state * string_map uint256 * stmt_result uint256
+                  := match countdown with
+                     | O => (world, loc, StmtSuccess)
+                     | S new_countdown =>
+                           let loc' := map_insert loc name (uint256_of_Z cursor) in
+                           let '(world', loc'', result) := interpret_stmt_list world loc' body CallOk
+                           in match result with
+                              | StmtSuccess | StmtAbort AbortContinue =>
+                                  interpret_loop_rec world' loc'' body
+                                                     (Z.succ cursor) new_countdown name CallOk
+                              | StmtAbort AbortBreak => (world', loc'', StmtSuccess)
+                              | _ => (world', loc'', result)
+                              end
+                     end
+           in let interpret_loop (world: world_state)
+                                 (loc: string_map uint256)
+                                 (body: list stmt)
+                                 (start: uint256)
+                                 (stop: Z)
+                                 (name: string)
+                                 (CallOk: let _ := string_set_impl in 
+                                          FSet.is_subset (stmt_list_callset body)
+                                                         (decl_callset (fun_decl fc)) = true)
+                 : world_state * string_map uint256 * stmt_result uint256
+                 := match map_lookup loc name with
+                    | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
+                    | None => if (Z_of_uint256 (uint256_of_Z stop) =? stop)%Z
+                                then let cursor := Z_of_uint256 start in
+                                     if (cursor <? stop)%Z
+                                       then let '(world', loc', result) :=
+                                                   interpret_loop_rec world loc body cursor
+                                                                      (Z.to_nat (stop - cursor)%Z)
+                                                                      name CallOk
+                                            in (world', map_remove loc' name, result)
+                                       else (world, loc, StmtSuccess)
+                                else (world, loc, StmtAbort (AbortError "loop range overflows"))
+                    end
+          in match s as s' return s = s' -> _ with
+          | SmallStmt ss => fun E => interpret_small_stmt world loc ss
+                                                 (callset_descend_small_stmt E CallOk)
+          | LocalVarDecl _ _ => fun E => False_rect _ (var_decl_helper NotVarDecl E)
+          | IfElseStmt cond yes no => fun E => 
+              let (world', result_cond) := interpret_expr
+                                             world loc cond
+                                             (callset_descend_stmt_if_cond E CallOk)
+              in match result_cond with
+                 | ExprAbort ab => (world', loc, StmtAbort ab)
+                 | ExprSuccess cond_value =>
+                     if (Z_of_uint256 cond_value =? 0)%Z
+                       then match no as no' return no = no' -> _ with
+                            | None => fun _ => (world', loc, StmtSuccess)
+                            | Some n => fun Eno =>
+                                interpret_stmt_list
+                                  world' loc n
+                                  (callset_descend_stmt_if_else E Eno CallOk)
+                            end eq_refl
+                       else interpret_stmt_list world' loc yes
+                                                (callset_descend_stmt_if_then E CallOk)
+                 end
+       (*   | FixedRangeLoop var start stop fr_body => fun E =>
+              interpret_loop world loc fr_body (match start with
+                                                | Some x => x
+                                                | None => zero256
+                                                end)
+                             (Z_of_uint256 stop) var
+                             (callset_descend_fixed_range_loop_body E CallOk)
+          | FixedCountLoop var start count fc_body => fun E =>
+              let (world', result_start) :=
+                    interpret_expr world loc start
+                                   (callset_descend_fixed_count_loop_start E CallOk)
+              in match result_start with
+                 | ExprAbort ab => (world', loc, StmtAbort ab)
+                 | ExprSuccess start_value =>
+                      interpret_loop world' loc fc_body start_value
+                             (Z_of_uint256 start_value + Z_of_uint256 count)%Z
+                             var (callset_descend_fixed_count_loop_body E CallOk)
+                 end *)
+          end eq_refl
    in match fun_decl fc as d return _ = d -> _ with
       | FunDecl _ arg_names body => fun E =>
           match bind_args arg_names arg_values with
@@ -581,60 +680,5 @@ Definition interpret (cd: calldag)
    | None => (world, expr_error "declaration not found")
    | Some (existT _ bound fc) => interpret_call fc world arg_values
    end.
-
-(*
-Fixpoint interpret_stmt {C: VyperConfig}
-                        (CALL_depth_bound: nat)
-                        (call_depth_bound: nat)
-                        (current_fun_depth: nat)
-                        (DepthOk: current_fun_depth < call_depth_bound)
-                        (cd: calldag)
-                        (allowed_calls: string_set)
-                        (world: world_state)
-                        (loc: string_map uint256)
-                        (return_type: Type)
-                        (s: stmt)
-                        (NotVarDecl: stmt_is_local_var_decl s = false)
-                        (CallOk: let _ := string_set_impl in 
-                                 FSet.is_subset (stmt_callset s) allowed_calls = true)
-: world_state * string_map uint256 * stmt_result return_type
-:= let interpret_loop := fix interpret_loop 
-   match s as s' return s = s' -> _ with
-   | SmallStmt ss => interpret_small_stmt XXXX
-   | LocalVarDecl _ _ => False_rect _ _
-   | IfElseStmt cond yes no =>
-      let (world', result_cond) := interpret_expr XXXXX
-   | FixedRangeLoop var start stop body =>
-      (* Range checks *)
-   | FixedCountLoop var start count body =>
-      (* Range checks *)
-   end eq_refl.
-Fixpoint interpret_stmt_list {C: VyperConfig}
-                             (CALL_depth_bound: nat)
-                             (call_depth_bound: nat)
-                             (current_fun_depth: nat)
-                             (DepthOk: current_fun_depth < call_depth_bound)
-                             (cd: calldag)
-                             (allowed_calls: string_set)
-                             (world: world_state)
-                             (loc: string_map uint256)
-                             (return_type: Type)
-                             (s: list stmt)
-                             (CallOk: let _ := string_set_impl in 
-                                      FSet.is_subset (stmt_list_callset s) allowed_calls = true)
-: world_state * string_map uint256 * stmt_result return_type
-:= match s with
-   | nil => (world, loc, StmtSuccess)
-   | LocalVarDecl name maybe_init :: rest =>
-      match Map.lookup loc name with
-      | Some _ => (world, StmtAbort (ErrorAbort "local variable shadowing"))
-      | None => _
-      end
-   | IfElseStmt cond yes no =>
-      
-   | FixedRangeLoop (var: string) (start: option uint256) (stop: uint256) (body: list stmt)
-   | FixedCountLoop (var: string) (start: string) (count: uint256) (body: list stmt).
-   end.
-*)
 
 End Interpret.

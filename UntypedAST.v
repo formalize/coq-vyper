@@ -72,8 +72,9 @@ Inductive stmt
 := SmallStmt (s: small_stmt)
  | LocalVarDecl (name: string) (init: option expr)
  | IfElseStmt (cond: expr) (yes: list stmt) (no: option (list stmt))
+(*
  | FixedRangeLoop (var: string) (start: option uint256) (stop: uint256) (body: list stmt)
- | FixedCountLoop (var: string) (start: string) (count: uint256) (body: list stmt).
+ | FixedCountLoop (var: string) (start: expr) (count: uint256) (body: list stmt) *).
 
 Inductive decl
 := (* ImportDecl
@@ -88,5 +89,23 @@ Definition decl_name (d: decl)
 := match d with
    | StorageVarDecl name | FunDecl name _ _ => name
    end.
+
+Definition is_local_var_decl {C: VyperConfig} (s: stmt)
+:= match s with
+   | LocalVarDecl _ _ => true
+   | _ => false
+   end.
+
+Program Definition var_decl_unpack {C: VyperConfig} (s: stmt) (IsVarDecl: is_local_var_decl s = true)
+: string * option expr
+:= match s with
+   | LocalVarDecl name init => (name, init)
+   | _ => False_rect _ _
+   end.
+Next Obligation.
+destruct s; cbn in IsVarDecl; try discriminate.
+assert (Bad := H name init). tauto.
+Qed.
+
 
 End AST.
