@@ -66,7 +66,7 @@ Ltac descend H
 Definition decl_callset (d: decl)
 := let _ := string_set_impl in match d with
    | StorageVarDecl _ => empty
-   | FunDecl name args body => (* stmt_list_callset *) small_stmt_callset body
+   | FunDecl name args body => stmt_callset body
    end.
 
 Lemma callset_descend_unop {e a: expr} {op: L10.AST.unop}

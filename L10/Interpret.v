@@ -95,9 +95,9 @@ Fixpoint bind_args (names: list string) (values: list uint256)
 Local Lemma interpret_call_helper {this_decl: decl}
                                   {fun_name: string}
                                   {arg_names: list string}
-                                  {body: small_stmt} (* list stmt *)
+                                  {body: list stmt}
                                   (E: this_decl = FunDecl fun_name arg_names body):
-  let _ := string_set_impl in FSet.is_subset (small_stmt_callset body) (decl_callset this_decl) = true.
+  let _ := string_set_impl in FSet.is_subset (stmt_list_callset body) (decl_callset this_decl) = true.
 Proof.
 subst this_decl. unfold decl_callset. apply FSet.is_subset_refl.
 Qed.
@@ -661,13 +661,63 @@ Fixpoint interpret_call {call_depth_bound: nat}
                            end
                  end
           end eq_refl
+   in let interpret_stmt_list (* XXX this is a huge dup from interpret_stmt! *)
+      := fix interpret_stmt_list (world: world_state)
+                                 (loc: string_map uint256)
+                                 (stmts: list stmt)
+                                 (CallOk: let _ := string_set_impl in 
+                                          FSet.is_subset (stmt_list_callset stmts)
+                                                         (decl_callset (fun_decl fc)) = true)
+         {struct stmts}
+         : world_state * string_map uint256 * stmt_result uint256
+         := match stmts as stmts' return stmts = stmts' -> _ with
+            | nil => fun _ => (world, loc, StmtSuccess)
+            | h :: t => fun E =>
+                (if is_local_var_decl h as h_is_var_decl return _ = h_is_var_decl -> _
+                   then fun Evar =>
+                     let name_init := var_decl_unpack h Evar in
+                     let name := fst name_init in
+                     let init := snd name_init in
+                     match map_lookup loc name with
+                     | Some _ => (world, loc, StmtAbort (AbortError "local variable already exists"))
+                     | None =>
+                         match init as init' return init = init' -> _ with
+                         | None => fun _ =>
+                             let '(world', loc', result) :=
+                               interpret_stmt_list world (map_insert loc name zero256) t
+                                                         (callset_descend_stmt_tail E CallOk)
+                             in (world', map_remove loc' name, result)
+                         | Some init_expr => fun Einit =>
+                             let '(world', result) := 
+                                    interpret_expr world loc init_expr
+                                                   (callset_descend_init_expr E Evar Einit CallOk)
+                             in match result with
+                                | ExprSuccess value =>
+                                    let '(world2, loc2, result2) :=
+                                      interpret_stmt_list world (map_insert loc name value) t
+                                                          (callset_descend_stmt_tail E CallOk)
+                                    in (world2, map_remove loc2 name, result2)
+                                | ExprAbort ab => (world', loc, StmtAbort ab)
+                                end
+                         end eq_refl
+                     end
+                   else fun Evar =>
+                     let '(world', loc', result) := 
+                       interpret_stmt world loc h Evar
+                                            (callset_descend_stmt_head E CallOk)
+                     in match result with
+                        | StmtSuccess => interpret_stmt_list world' loc' t
+                                                             (callset_descend_stmt_tail E CallOk)
+                        | _ => (world', loc', result)
+                        end) eq_refl
+            end eq_refl
    in match fun_decl fc as d return _ = d -> _ with
       | FunDecl _ arg_names body => fun E =>
           match bind_args arg_names arg_values with
           | inl err => (world, expr_error err)
           | inr loc =>
-              let '(world', loc', result) := interpret_small_stmt world loc body 
-                                                                  (interpret_call_helper E)
+              let '(world', loc', result) := interpret_stmt_list world loc body 
+                                                                 (interpret_call_helper E)
               in (world', match result with
                           | StmtSuccess => ExprSuccess zero256
                           | StmtReturnFromFunction x => ExprSuccess x

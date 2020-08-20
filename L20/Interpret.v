@@ -62,9 +62,9 @@ Fixpoint bind_args (names: list string) (values: list uint256)
 Local Lemma interpret_call_helper {this_decl: decl}
                                   {fun_name: string}
                                   {arg_names: list string}
-                                  {body: small_stmt} (* list stmt *)
+                                  {body: stmt}
                                   (E: this_decl = FunDecl fun_name arg_names body):
-  let _ := string_set_impl in FSet.is_subset (small_stmt_callset body) (decl_callset this_decl) = true.
+  let _ := string_set_impl in FSet.is_subset (stmt_callset body) (decl_callset this_decl) = true.
 Proof.
 subst this_decl. unfold decl_callset. apply FSet.is_subset_refl.
 Qed.
@@ -489,8 +489,8 @@ Fixpoint interpret_call {call_depth_bound: nat}
             match bind_args arg_names arg_values with
             | inl err => (world, expr_error err)
             | inr loc =>
-                let '(world', loc', result) := interpret_small_stmt world loc body 
-                                                                    (interpret_call_helper E)
+                let '(world', loc', result) := interpret_stmt world loc body 
+                                                              (interpret_call_helper E)
                 in (world', match result with
                             | L10.Interpret.StmtSuccess _ => L10.Interpret.ExprSuccess _ zero256
                             | L10.Interpret.StmtReturnFromFunction _ x => L10.Interpret.ExprSuccess _ x
