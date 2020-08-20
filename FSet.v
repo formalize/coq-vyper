@@ -765,3 +765,29 @@ destruct (has a x); destruct (has b x); destruct (has c x); tauto.
 Qed.
 
 End SetFacts.
+
+
+
+Section SetUtils.
+
+Context {M: Type} {E: forall x y: M, {x = y} + {x <> y}} {S: Type} {C: class E S}.
+
+Definition filter (s: S) (f: M -> bool) := from_list (List.filter f (to_list s)).
+
+Lemma filter_ok (s: S) (f: M -> bool) (x: M):
+  has (filter s f) x = has s x && f x.
+Proof.
+unfold filter.
+rewrite has_from_list.
+rewrite has_to_list.
+induction to_list. { easy. }
+cbn. remember (f a) as fa. destruct fa.
+{
+  cbn. destruct (E x a). 2:assumption.
+  subst. now rewrite<- Heqfa.
+}
+rewrite IHl. destruct (E x a). 2: trivial.
+subst. rewrite<- Heqfa. repeat rewrite Bool.andb_false_r. trivial.
+Qed.
+
+End SetUtils.
