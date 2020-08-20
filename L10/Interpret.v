@@ -1,6 +1,6 @@
 From Coq Require Import String Arith NArith ZArith.
-Require Import Config L10.AST L10.Callset.
-Require FSet Map UInt256.
+From Vyper Require Import Config L10.AST L10.Callset NaryFun.
+From Vyper Require FSet Map UInt256.
 
 Local Open Scope list_scope.
 Local Open Scope string_scope.
@@ -281,8 +281,20 @@ Proof.
 now subst.
 Qed.
 
+Definition builtin := { arity: nat
+                      & world_state -> nary_fun uint256 arity (world_state * expr_result uint256) 
+                      }.
+
+Definition call_builtin {arity: nat}
+                        (args: list uint256)
+                        (ArityOk: (arity =? List.length args)%nat = true)
+                        (callable: nary_fun uint256 arity (world_state * expr_result uint256))
+: world_state * expr_result uint256
+:= fst (nary_call callable args (Nat.eq_le_incl _ _ (proj1 (Nat.eqb_eq _ _) ArityOk))).
+
 Fixpoint interpret_call {call_depth_bound: nat}
                         {cd: calldag}
+                        (builtins: string -> option builtin)
                         (fc: fun_ctx cd call_depth_bound)
                         (world: world_state)
                         (arg_values: list uint256)
@@ -403,8 +415,16 @@ Fixpoint interpret_call {call_depth_bound: nat}
                         | ExprSuccess arg_values =>
                             match fun_ctx_descend fc CallOk Ebound E with
                             | None => (* can't resolve the function, maybe it's a builtin *)
-                                      (world', expr_error "can't resolve function name")
-                            | Some new_fc => interpret_call new_fc world' arg_values
+                               match builtins name with
+                               | Some (existT _ arity b) =>
+                                  (if (arity =? List.length arg_values)%nat as arity_ok 
+                                   return _ = arity_ok -> _
+                                       then fun Earity => call_builtin arg_values Earity (b world')
+                                       else fun _ => (world', expr_error "builtin with wrong arity"))
+                                     eq_refl
+                               | None => (world', expr_error "can't resolve function name")
+                               end
+                            | Some new_fc => interpret_call builtins new_fc world' arg_values
                             end
                         end
                  end eq_refl
@@ -689,14 +709,15 @@ Definition make_fun_ctx_and_bound (cd: calldag)
    end eq_refl.
 
 (** This is a simplified interface to interpret_call that takes care of creating a function context. *)
-Definition interpret (cd: calldag)
+Definition interpret (builtins: string -> option builtin)
+                     (cd: calldag)
                      (function_name: string)
                      (world: world_state)
                      (arg_values: list uint256)
 : world_state * expr_result uint256
 := match make_fun_ctx_and_bound cd function_name with
    | None => (world, expr_error "declaration not found")
-   | Some (existT _ bound fc) => interpret_call fc world arg_values
+   | Some (existT _ bound fc) => interpret_call builtins fc world arg_values
    end.
 
 End Interpret.
