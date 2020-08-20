@@ -414,6 +414,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                         | ExprAbort ab => (world', ExprAbort ab)
                         | ExprSuccess arg_values =>
                             match fun_ctx_descend fc CallOk Ebound E with
+                            | Some new_fc => interpret_call builtins new_fc world' arg_values
                             | None => (* can't resolve the function, maybe it's a builtin *)
                                match builtins name with
                                | Some (existT _ arity b) =>
@@ -424,7 +425,6 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                      eq_refl
                                | None => (world', expr_error "can't resolve function name")
                                end
-                            | Some new_fc => interpret_call builtins new_fc world' arg_values
                             end
                         end
                  end eq_refl
