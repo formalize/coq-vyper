@@ -9,11 +9,11 @@ Context {C: VyperConfig}.
 Fixpoint expr_callset (e: expr)
 : string_set
 := let _ := string_set_impl in
-   let expr_list_callset := fix expr_list_callset (exprs: list expr) :=
-      match exprs with
-      | nil => empty
-      | (h :: t)%list => union (expr_callset h) (expr_list_callset t)
-      end
+   let fix expr_list_callset (exprs: list expr)
+       := match exprs with
+          | nil => empty
+          | (h :: t)%list => union (expr_callset h) (expr_list_callset t)
+          end
    in match e with
       | Const _ | LocalVar _ | StorageVar _ => empty
       | UnOp _ a => expr_callset a
@@ -43,11 +43,11 @@ Definition small_stmt_callset (s: small_stmt)
 
 Fixpoint stmt_callset (s: stmt)
 := let _ := string_set_impl in
-   let stmt_list_callset := fix stmt_list_callset (stmts: list stmt) :=
-         match stmts with
-         | nil => empty
-         | (h :: t)%list => union (stmt_callset h) (stmt_list_callset t)
-         end
+   let fix stmt_list_callset (stmts: list stmt)
+       := match stmts with
+          | nil => empty
+          | (h :: t)%list => union (stmt_callset h) (stmt_list_callset t)
+          end
    in match s with
    | SmallStmt a => small_stmt_callset a
    | LocalVarDecl _ e scope => union (expr_callset e) (stmt_callset scope)

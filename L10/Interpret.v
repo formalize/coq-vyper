@@ -300,23 +300,22 @@ Fixpoint interpret_call {call_depth_bound: nat}
                         (arg_values: list uint256)
 {struct call_depth_bound}
 : world_state * expr_result uint256
-:= let interpret_expr 
-   := fix interpret_expr
-         (world: world_state)
-         (loc: string_map uint256)
-         (e: expr)
-         (CallOk: let _ := string_set_impl in 
-                  FSet.is_subset (expr_callset e) (decl_callset (fun_decl fc)) = true)
+:= let fix interpret_expr (world: world_state)
+                          (loc: string_map uint256)
+                          (e: expr)
+                          (CallOk: let _ := string_set_impl in 
+                                   FSet.is_subset (expr_callset e)
+                                                  (decl_callset (fun_decl fc))
+                                   = true)
       {struct e}
       : world_state * expr_result uint256
-      := let interpret_expr_list
-         := fix interpret_expr_list (world: world_state)
-                                    (loc: string_map uint256)
-                                    (e: list expr)
-                                    (CallOk: let _ := string_set_impl in 
-                                             FSet.is_subset (expr_list_callset e)
-                                                            (decl_callset (fun_decl fc))
-                                             = true)
+      := let fix interpret_expr_list (world: world_state)
+                                     (loc: string_map uint256)
+                                     (e: list expr)
+                                     (CallOk: let _ := string_set_impl in 
+                                              FSet.is_subset (expr_list_callset e)
+                                                             (decl_callset (fun_decl fc))
+                                              = true)
             {struct e}
             : world_state * expr_result (list uint256)
             := match e as e' return e = e' -> _ with
@@ -494,23 +493,21 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                             | ExprAbort ab => StmtAbort ab
                                             end)
            end eq_refl
-     in let interpret_stmt
-        := fix interpret_stmt (world: world_state)
-                              (loc: string_map uint256)
-                              (s: stmt)
-                              (NotVarDecl: is_local_var_decl s = false)
-                              (CallOk: let _ := string_set_impl in 
-                                       FSet.is_subset (stmt_callset s) 
-                                                      (decl_callset (fun_decl fc)) = true)
+     in let fix interpret_stmt (world: world_state)
+                               (loc: string_map uint256)
+                               (s: stmt)
+                               (NotVarDecl: is_local_var_decl s = false)
+                               (CallOk: let _ := string_set_impl in 
+                                        FSet.is_subset (stmt_callset s) 
+                                                       (decl_callset (fun_decl fc)) = true)
            {struct s}
            : world_state * string_map uint256 * stmt_result uint256
-           := let interpret_stmt_list
-              := fix interpret_stmt_list (world: world_state)
-                                         (loc: string_map uint256)
-                                         (stmts: list stmt)
-                                         (CallOk: let _ := string_set_impl in 
-                                                  FSet.is_subset (stmt_list_callset stmts)
-                                                                 (decl_callset (fun_decl fc)) = true)
+           := let fix interpret_stmt_list (world: world_state)
+                                          (loc: string_map uint256)
+                                          (stmts: list stmt)
+                                          (CallOk: let _ := string_set_impl in 
+                                                   FSet.is_subset (stmt_list_callset stmts)
+                                                                  (decl_callset (fun_decl fc)) = true)
                  {struct stmts}
                  : world_state * string_map uint256 * stmt_result uint256
                  := match stmts as stmts' return stmts = stmts' -> _ with
@@ -577,8 +574,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                                 (callset_descend_stmt_if_then E CallOk)
                  end
           | FixedRangeLoop var start stop body => fun E =>
-             let interpret_loop_rec
-             :=  fix interpret_loop_rec (world: world_state)
+             let fix interpret_loop_rec (world: world_state)
                                         (loc: string_map uint256)
                                         (cursor: Z)
                                         (countdown: nat)
@@ -617,8 +613,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                               in (world', map_remove loc' var, result)
              end
           | FixedCountLoop var start count body => fun E =>
-             let interpret_loop_rec (* almost dup from FixedRangeLoop branch *)
-             :=  fix interpret_loop_rec (world: world_state)
+             let fix interpret_loop_rec (world: world_state)  (* almost dup from FixedRangeLoop branch *)
                                         (loc: string_map uint256)
                                         (cursor: Z)
                                         (countdown: nat)
@@ -661,13 +656,12 @@ Fixpoint interpret_call {call_depth_bound: nat}
                            end
                  end
           end eq_refl
-   in let interpret_stmt_list (* XXX this is a huge dup from interpret_stmt! *)
-      := fix interpret_stmt_list (world: world_state)
-                                 (loc: string_map uint256)
-                                 (stmts: list stmt)
-                                 (CallOk: let _ := string_set_impl in 
-                                          FSet.is_subset (stmt_list_callset stmts)
-                                                         (decl_callset (fun_decl fc)) = true)
+   in let fix interpret_stmt_list (world: world_state) (* XXX this is a huge dup from interpret_stmt! *)
+                                  (loc: string_map uint256)
+                                  (stmts: list stmt)
+                                  (CallOk: let _ := string_set_impl in 
+                                           FSet.is_subset (stmt_list_callset stmts)
+                                                          (decl_callset (fun_decl fc)) = true)
          {struct stmts}
          : world_state * string_map uint256 * stmt_result uint256
          := match stmts as stmts' return stmts = stmts' -> _ with

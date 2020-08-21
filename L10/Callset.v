@@ -17,11 +17,11 @@ Fixpoint expr_callset (e: expr)
    | LogicalAnd a b => union (expr_callset a) (expr_callset b)
    | IfThenElse a b c => union (expr_callset a) (union (expr_callset b) (expr_callset c))
    | PrivateOrBuiltinCall name args =>
-      let expr_list_callset := fix expr_list_callset (exprs: list expr) :=
-         match exprs with
-         | nil => empty
-         | (h :: t)%list => union (expr_callset h) (expr_list_callset t)
-         end
+      let fix expr_list_callset (exprs: list expr)
+          := match exprs with
+             | nil => empty
+             | (h :: t)%list => union (expr_callset h) (expr_list_callset t)
+             end
       in add (expr_list_callset args) name
    end.
 Fixpoint expr_list_callset (exprs: list expr)
@@ -44,11 +44,11 @@ Definition small_stmt_callset (s: small_stmt)
 
 Fixpoint stmt_callset (s: stmt)
 := let _ := string_set_impl in
-   let stmt_list_callset := fix stmt_list_callset (stmts: list stmt) :=
-         match stmts with
-         | nil => empty
-         | (h :: t)%list => union (stmt_callset h) (stmt_list_callset t)
-         end
+   let fix stmt_list_callset (stmts: list stmt) 
+       := match stmts with
+          | nil => empty
+          | (h :: t)%list => union (stmt_callset h) (stmt_list_callset t)
+          end
    in match s with
    | SmallStmt a => small_stmt_callset a
    | LocalVarDecl _ None => empty
