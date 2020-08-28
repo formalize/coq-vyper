@@ -27,17 +27,3 @@ L20/Callset.v
 L20/Interpret.v
 
 From10To20/Translate.v
-
-MenhirLib/Alphabet.v
-MenhirLib/Automaton.v
-MenhirLib/Grammar.v
-MenhirLib/Interpreter.v
-MenhirLib/Interpreter_complete.v
-MenhirLib/Interpreter_correct.v
-MenhirLib/Main.v
-MenhirLib/Validator_classes.v
-MenhirLib/Validator_complete.v
-MenhirLib/Validator_safe.v
-MenhirLib/Version.v
-
-Parser/Parser.v

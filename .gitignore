@@ -1,9 +1,0 @@
-*.v.d
-*.vok
-*.vos
-*.vo
-*.glob
-*.aux
-*.d
-*.cache
-Parser/Parser.v
