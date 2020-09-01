@@ -708,6 +708,45 @@ destruct has; destruct has;
   try repeat rewrite orb_false_r in *; trivial.
 Qed.
 
+Lemma add_subset_and (a b: S) (x: M):
+  is_subset (add a x) b = is_subset a b && has b x.
+Proof.
+remember (is_subset a b) as ab. symmetry in Heqab.
+remember (has b x) as bx. symmetry in Heqbx.
+destruct ab.
+{
+  rewrite is_subset_ok in Heqab.
+  rewrite andb_true_l.
+  destruct bx.
+  { (* bx = true *)
+    rewrite is_subset_ok.
+    intro y. assert (ABy := Heqab y).
+    rewrite add_ok.
+    destruct E; now subst.
+  }
+  remember (is_subset (add a x) b) as f. symmetry in Heqf.
+  destruct f. 2:trivial.
+  rewrite is_subset_ok in Heqf.
+  assert (ABx := Heqab x). assert (Fx := Heqf x).
+  destruct has; destruct has; 
+    try rewrite orb_true_r in *; 
+    try rewrite orb_false_r in *; trivial.
+  { cbn in ABx. discriminate. }
+  rewrite add_has in Fx. cbn in Fx. discriminate.
+}
+remember (is_subset (add a x) b) as f. symmetry in Heqf.
+destruct f. 2:trivial.
+enough (AB: is_subset a b = true) by (rewrite Heqab in AB; discriminate).
+clear Heqab.
+rewrite is_subset_ok in Heqf. rewrite is_subset_ok.
+intro y. assert (Fy := Heqf y). clear Heqf.
+rewrite add_ok in Fy.
+clear bx Heqbx.
+destruct E.
+{ cbn in Fy. rewrite Fy. apply orb_true_r. }
+exact Fy.
+Qed.
+
 Lemma inter_subset_l (a b: S):
   is_subset (inter a b) a = true.
 Proof.

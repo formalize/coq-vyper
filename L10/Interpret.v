@@ -1,5 +1,5 @@
-From Coq Require Import String Arith NArith ZArith.
-From Vyper Require Import Config L10.AST L10.Callset NaryFun.
+From Coq Require Import String Arith NArith ZArith Eqdep_dec.
+From Vyper Require Import Config L10.AST L10.Callset NaryFun Some.
 From Vyper Require FSet Map UInt256.
 
 Local Open Scope list_scope.
@@ -116,12 +116,12 @@ Lemma call_descend {call_depth_bound new_call_depth_bound current_fun_depth: nat
                    (current_fun_depth_ok:
                      cd_depthmap cd this_fun_name = Some current_fun_depth)
                    (e: expr)
-                   (CallOk : let _ := string_set_impl in
+                   (CallOk: let _ := string_set_impl in
                              FSet.is_subset (expr_callset e) (decl_callset this_decl) = true)
-                   (Ebound : call_depth_bound = S new_call_depth_bound)
-                   (name : string)
-                   (args : list expr)
-                   (E : e = PrivateOrBuiltinCall name args)
+                   (Ebound: call_depth_bound = S new_call_depth_bound)
+                   {name: string}
+                   {args: list expr}
+                   (E: e = PrivateOrBuiltinCall name args)
                    {depth: nat}
                    (Edepth: cd_depthmap cd name = Some depth):
   depth < new_call_depth_bound.
@@ -149,20 +149,28 @@ rewrite Nat.le_succ_l in DepthOk.
 apply (Nat.le_lt_trans _ _ _ L DepthOk).
 Qed.
 
-Record fun_ctx (cd: calldag) (bound: nat) := {
+(**
+  A functional context is the result of looking up a function by name.
+  
+ *)
+Record fun_ctx {decl_type: Type}
+               {decl_callset: decl_type -> string_set}
+               (cd: generic_calldag decl_type decl_callset)
+               (bound: nat) := {
   fun_name: string;
   fun_depth: nat;
   fun_depth_ok: cd_depthmap cd fun_name = Some fun_depth;
-  fun_decl: decl;
+  fun_decl: decl_type;
   fun_decl_ok: cd_declmap cd fun_name = Some fun_decl;
-  fun_bound_ok: fun_depth < bound;
+  fun_bound_ok: fun_depth <? bound = true;
 }.
-Arguments fun_name     {_ _}.
-Arguments fun_depth    {_ _}.
-Arguments fun_depth_ok {_ _}.
-Arguments fun_decl     {_ _}.
-Arguments fun_decl_ok  {_ _}.
-Arguments fun_bound_ok {_ _}.
+Arguments fun_name     {_ _ _ _}.
+Arguments fun_depth    {_ _ _ _}.
+Arguments fun_depth_ok {_ _ _ _}.
+Arguments fun_decl     {_ _ _ _}.
+Arguments fun_decl_ok  {_ _ _ _}.
+Arguments fun_bound_ok {_ _ _ _}.
+
 
 Local Lemma fun_ctx_descend_helper {cd: calldag}
                                    {name: string}
@@ -177,6 +185,61 @@ rewrite H in D.
 exact D.
 Qed.
 
+Local Lemma call_descend' {call_depth_bound new_call_depth_bound}
+                          {cd: calldag}
+                          {e: expr}
+                          {name: string}
+                          {args: list expr}
+                          (fc: fun_ctx cd call_depth_bound)
+                          (CallOk: let _ := string_set_impl in
+                                      FSet.is_subset (expr_callset e)
+                                                     (decl_callset (fun_decl fc))
+                                       = true)
+                          (Ebound: call_depth_bound = S new_call_depth_bound)
+                          (E: e = PrivateOrBuiltinCall name args)
+                          {d: decl}
+                          (Edecl: cd_declmap cd name = Some d)
+                          {depth: nat}
+                          (Edepth: cd_depthmap cd name = Some depth):
+  (depth <? new_call_depth_bound) = true.
+Proof.
+exact (proj2 (Nat.ltb_lt _ _)
+         (call_descend (proj1 (Nat.ltb_lt _ _) (fun_bound_ok fc))
+                       cd (fun_name fc)
+                       (fun_decl fc) (fun_decl_ok fc)
+                       (fun_depth_ok fc) e CallOk Ebound 
+                       E Edepth)).
+Qed.
+
+(* The inner part of fun_ctx_descend is here separately because
+   it's too difficult to destruct [cd_depthmap cd name] otherwise. 
+ *)
+Local Definition fun_ctx_descend_inner {call_depth_bound new_call_depth_bound}
+                           {cd: calldag}
+                           {e: expr}
+                           {name: string}
+                           {args: list expr}
+                           (fc: fun_ctx cd call_depth_bound)
+                           (CallOk: let _ := string_set_impl in
+                                       FSet.is_subset (expr_callset e)
+                                                      (decl_callset (fun_decl fc))
+                                        = true)
+                           (Ebound: call_depth_bound = S new_call_depth_bound)
+                           (E: e = PrivateOrBuiltinCall name args)
+                           {d: decl}
+                           (Edecl: cd_declmap cd name = Some d)
+:= match cd_depthmap cd name as maybe_depth return _ = maybe_depth -> _ with
+   | None => fun Edepth => False_rect _ (fun_ctx_descend_helper Edecl Edepth)
+   | Some depth => fun Edepth =>
+       Some {| fun_name := name
+             ; fun_depth := depth
+             ; fun_depth_ok := Edepth
+             ; fun_decl := d
+             ; fun_decl_ok := Edecl
+             ; fun_bound_ok := call_descend' fc CallOk Ebound E Edecl Edepth
+            |}
+   end eq_refl.
+
 (** Make a callee context from a caller context and a call expression, 
   The None result means that no declaration with the given name is found.
   No check is made that the callee context is indeed a function.
@@ -187,7 +250,6 @@ Definition fun_ctx_descend {call_depth_bound new_call_depth_bound}
                            {e: expr}
                            {name: string}
                            {args: list expr}
-
                            (fc: fun_ctx cd call_depth_bound)
                            (CallOk: let _ := string_set_impl in
                                        FSet.is_subset (expr_callset e)
@@ -200,22 +262,66 @@ Definition fun_ctx_descend {call_depth_bound new_call_depth_bound}
    | None => fun _ =>
        (* no declaration found - could be a builtin *)
        None
-   | Some d => fun Edecl =>
-       match cd_depthmap cd name as maybe_depth return _ = maybe_depth -> _ with
-       | None => fun Edepth => False_rect _ (fun_ctx_descend_helper Edecl Edepth)
-       | Some depth => fun Edepth =>
-           Some {| fun_name := name
-                 ; fun_depth := depth
-                 ; fun_depth_ok := Edepth
-                 ; fun_decl := d
-                 ; fun_decl_ok := Edecl
-                 ; fun_bound_ok := call_descend (fun_bound_ok fc) cd (fun_name fc)
-                                                (fun_decl fc) (fun_decl_ok fc)
-                                                (fun_depth_ok fc) e CallOk Ebound 
-                                                name args E Edepth
-                |}
-       end eq_refl
+   | Some d => fun Edecl => fun_ctx_descend_inner fc CallOk Ebound E Edecl
    end eq_refl.
+
+Lemma fun_ctx_descend_irrel {call_depth_bound new_call_depth_bound}
+                            {cd: calldag}
+                            {e: expr}
+                            {name: string}
+                            {args: list expr}
+                            (fc1 fc2: fun_ctx cd call_depth_bound)
+                            (CallOk1: let _ := string_set_impl in
+                                        FSet.is_subset (expr_callset e)
+                                                       (decl_callset (fun_decl fc1))
+                                         = true)
+                            (CallOk2: let _ := string_set_impl in
+                                        FSet.is_subset (expr_callset e)
+                                                       (decl_callset (fun_decl fc2))
+                                         = true)
+                            (Ebound: call_depth_bound = S new_call_depth_bound)
+                            (E: e = PrivateOrBuiltinCall name args):
+  fun_ctx_descend fc1 CallOk1 Ebound E = fun_ctx_descend fc2 CallOk2 Ebound E.
+Proof.
+unfold fun_ctx_descend.
+assert (InnerOk: forall (d: decl) (Edecl: cd_declmap cd name = Some d),
+                   fun_ctx_descend_inner fc1 CallOk1 Ebound E Edecl
+                    =
+                   fun_ctx_descend_inner fc2 CallOk2 Ebound E Edecl).
+{
+  intros. unfold fun_ctx_descend_inner.
+  remember (fun (depth: nat) (Edepth: cd_depthmap cd name = Some depth) => Some {|
+      fun_name := name;
+      fun_depth := depth;
+      fun_depth_ok := Edepth;
+      fun_decl := d;
+      fun_decl_ok := Edecl;
+      fun_bound_ok := call_descend' fc1 CallOk1 Ebound E Edecl Edepth |}) as some_branch1.
+  remember (fun (depth: nat) (Edepth: cd_depthmap cd name = Some depth) => Some {|
+      fun_name := name;
+      fun_depth := depth;
+      fun_depth_ok := Edepth;
+      fun_decl := d;
+      fun_decl_ok := Edecl;
+      fun_bound_ok := call_descend' fc2 CallOk2 Ebound E Edecl Edepth |}) as some_branch2.
+  assert(SomeBranchOk: forall (depth: nat) (Edepth: cd_depthmap cd name = Some depth),
+                         some_branch1 depth Edepth = some_branch2 depth Edepth).
+  {
+    intros. subst. f_equal. f_equal.
+    apply eq_proofs_unicity. decide equality.
+  }
+  clear Heqsome_branch1 Heqsome_branch2.
+  remember fun_ctx_descend_helper as foo. clear Heqfoo. revert foo.
+  revert CallOk1 CallOk2.
+  destruct (cd_depthmap cd name).
+  { intros. apply SomeBranchOk. }
+  trivial.
+}
+remember fun_ctx_descend_inner as inner. clear Heqinner. revert inner CallOk1 CallOk2 InnerOk.
+destruct (cd_declmap cd name). (* this is why fun_ctx_descend_inner exists *)
+{ intros. apply InnerOk. }
+trivial.
+Qed.
 
 (*************************************************************************************************)
 
@@ -780,7 +886,9 @@ Fixpoint interpret_call {call_depth_bound: nat}
 : world_state * expr_result uint256
 := match call_depth_bound as call_depth_bound' return _ = call_depth_bound' -> _ with
    | O => fun Ebound => False_rect _ (Nat.nlt_0_r (fun_depth fc)
-                                                  (eq_ind _ _ (fun_bound_ok fc) _ Ebound))
+                                                  (eq_ind _ _
+                                                          (proj1 (Nat.ltb_lt _ _) (fun_bound_ok fc))
+                                                          _ Ebound))
    | S new_call_depth_bound => fun Ebound =>
       match fun_decl fc as d return _ = d -> _ with
       | FunDecl _ arg_names body => fun E =>
@@ -826,7 +934,8 @@ Definition make_fun_ctx_and_bound (cd: calldag)
                                                   ; fun_decl_ok := Ed
                                                   ; fun_depth := depth
                                                   ; fun_depth_ok := Edepth
-                                                  ; fun_bound_ok := Nat.lt_succ_diag_r _
+                                                  ; fun_bound_ok := proj2 (Nat.ltb_lt _ _)
+                                                                          (Nat.lt_succ_diag_r _)
                                                  |})
       end eq_refl
    end eq_refl.
@@ -842,5 +951,205 @@ Definition interpret (builtins: string -> option builtin)
    | None => (world, expr_error "declaration not found")
    | Some (existT _ bound fc) => interpret_call builtins fc world arg_values
    end.
+
+Ltac destruct_let_pair
+:= match goal with
+   |- (let (_, _) := ?x in _) = let (_, _) := ?x in _ =>
+     destruct x
+   end.
+Ltac destruct_if
+:= match goal with
+   |- (if ?x then _ else _) = (if ?x then _ else _) =>
+     destruct x
+   end.
+
+(* An alternative to this #$@% would be to have proper Leibnitz equality on fun_ctx
+   or give up and bring in the proof irrelevance axiom.
+   Part of the problem is that there's no equality predicate on uint256s so far
+   because they can be represented by Zs.
+   There goes the hope for having an equality predicate on exprs/stmts/decls as well.
+   But this is an easy practice for induction on expr, so whatever.
+ *)
+Lemma interpret_expr_fun_ctx_irrel {bigger_call_depth_bound smaller_call_depth_bound: nat}
+                                   (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+                                   {cd: calldag}
+                                   {fc1 fc2: fun_ctx cd bigger_call_depth_bound}
+                                   (FcOk: fun_name fc1 = fun_name fc2)
+                                   (do_call: forall
+                                                 (fc': fun_ctx cd smaller_call_depth_bound)
+                                                 (world: world_state)
+                                                 (arg_values: list uint256),
+                                               world_state * expr_result uint256)
+                                   (builtins: string -> option builtin)
+                                   (world: world_state)
+                                   (loc: string_map uint256)
+                                   (e: expr)
+                                   (CallOk1: let _ := string_set_impl in 
+                                                FSet.is_subset (expr_callset e)
+                                                               (decl_callset (fun_decl fc1))
+                                                = true)
+                                   (CallOk2: let _ := string_set_impl in 
+                                                FSet.is_subset (expr_callset e)
+                                                               (decl_callset (fun_decl fc2))
+                                                = true):
+  interpret_expr Ebound fc1 do_call builtins world loc e CallOk1
+   =
+  interpret_expr Ebound fc2 do_call builtins world loc e CallOk2.
+Proof.
+revert world loc.
+induction e using expr_ind'; cbn; intros.
+{ trivial. }
+{ trivial. }
+{ trivial. }
+{ (* unop *)
+  now rewrite IHe with (CallOk2 := callset_descend_unop eq_refl CallOk2).
+}
+{ (* binop *)
+  rewrite IHe1 with (CallOk2 := callset_descend_binop_left eq_refl CallOk2).
+  destruct_let_pair.
+  destruct e. 2:{ trivial. }
+  rewrite IHe2 with (CallOk2 := callset_descend_binop_right eq_refl CallOk2).
+  destruct_let_pair.
+  trivial.
+}
+{ (* if *)
+  rewrite IHe1 with (CallOk2 := callset_descend_if_cond eq_refl CallOk2).
+  destruct_let_pair.
+  destruct e. 2:{ trivial. }
+  destruct_if.
+  { now rewrite IHe3 with (CallOk2 := callset_descend_if_else eq_refl CallOk2). }
+  now rewrite IHe2 with (CallOk2 := callset_descend_if_then eq_refl CallOk2).
+}
+{ (* and *)
+  rewrite IHe1 with (CallOk2 := callset_descend_and_left eq_refl CallOk2).
+  destruct_let_pair.
+  destruct e. 2:{ trivial. }
+  now destruct_if.
+}
+{ (* or *)
+  rewrite IHe1 with (CallOk2 := callset_descend_or_left eq_refl CallOk2).
+  destruct_let_pair.
+  destruct e. 2:{ trivial. }
+  now destruct_if.
+}
+(* call *)
+remember (fix interpret_expr_list world loc (e: list expr) CallOk := _) as interpret_expr_list1.
+remember (fix interpret_expr_list world loc (e: list expr) 
+                                  (CallOk: FSet.is_subset (expr_list_callset e)
+                                           (decl_callset (fun_decl fc2)) 
+                                           = true) := _) as interpret_expr_list2.
+assert (L: interpret_expr_list1 world loc args (callset_descend_args eq_refl CallOk1)
+            =
+           interpret_expr_list2 world loc args (callset_descend_args eq_refl CallOk2)).
+{
+  remember (callset_descend_args eq_refl CallOk1) as ListCallOk1.
+  remember (callset_descend_args eq_refl CallOk2) as ListCallOk2.
+  clear HeqListCallOk1 HeqListCallOk2 CallOk1 CallOk2.
+  revert world loc ListCallOk1 ListCallOk2.
+  induction args; intros. { now subst. }
+  rewrite Heqinterpret_expr_list1. rewrite Heqinterpret_expr_list2. cbn.
+  rewrite (List.Forall_inv H 
+            (callset_descend_head eq_refl ListCallOk1) 
+            (callset_descend_head eq_refl ListCallOk2)).
+  destruct_let_pair.
+  destruct e. 2:{ trivial. }
+  rewrite<- Heqinterpret_expr_list1.
+  rewrite<- Heqinterpret_expr_list2.
+  rewrite (IHargs (List.Forall_inv_tail H) w loc
+            (callset_descend_tail eq_refl ListCallOk1)
+            (callset_descend_tail eq_refl ListCallOk2)).
+  now destruct_let_pair.
+}
+clear Heqinterpret_expr_list1 Heqinterpret_expr_list2.
+rewrite L.
+destruct_let_pair.
+destruct e. 2:{ trivial. }
+assert (F: fun_ctx_descend fc1 CallOk1 Ebound eq_refl
+            =
+           fun_ctx_descend fc2 CallOk2 Ebound eq_refl).
+{ apply fun_ctx_descend_irrel. }
+rewrite F.
+now destruct (fun_ctx_descend fc2 CallOk2 Ebound eq_refl).
+Qed.
+
+Ltac destruct_interpret_expr_irrel
+:= match goal with
+   H: fun_name ?fc1 = fun_name ?fc2 
+   |- (let (_, _) := interpret_expr ?Ebound ?fc1 ?do_call ?builtins ?world ?loc ?e ?c1 in _)
+       =
+      (let (_, _) := interpret_expr ?Ebound ?fc2 ?do_call ?builtins ?world ?loc ?e ?c2 in _)
+       =>
+      rewrite (interpret_expr_fun_ctx_irrel Ebound H do_call builtins
+                                            world loc e c1 c2);
+      destruct_let_pair
+   end.
+
+Lemma interpret_small_stmt_fun_ctx_irrel {bigger_call_depth_bound smaller_call_depth_bound: nat}
+                                         (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+                                         {cd: calldag}
+                                         {fc1 fc2: fun_ctx cd bigger_call_depth_bound}
+                                         (FcOk: fun_name fc1 = fun_name fc2)
+                                         (do_call: forall
+                                                       (fc': fun_ctx cd smaller_call_depth_bound)
+                                                       (world: world_state)
+                                                       (arg_values: list uint256),
+                                                     world_state * expr_result uint256)
+                                         (builtins: string -> option builtin)
+                                         (world: world_state)
+                                         (loc: string_map uint256)
+                                         (ss: small_stmt)
+                                         (CallOk1: let _ := string_set_impl in 
+                                                      FSet.is_subset (small_stmt_callset ss)
+                                                                     (decl_callset (fun_decl fc1))
+                                                      = true)
+                                         (CallOk2: let _ := string_set_impl in 
+                                                      FSet.is_subset (small_stmt_callset ss)
+                                                                     (decl_callset (fun_decl fc2))
+                                                      = true):
+  interpret_small_stmt Ebound fc1 do_call builtins world loc ss CallOk1
+   =
+  interpret_small_stmt Ebound fc2 do_call builtins world loc ss CallOk2.
+Proof.
+revert world loc.
+destruct ss; intros; cbn; try easy; try destruct result;
+  try destruct_interpret_expr_irrel; trivial;
+  try destruct_let_pair.
+(* assert *)
+destruct e. 2:{ trivial. }
+destruct (Z_of_uint256 value =? 0)%Z. 2:{ trivial. }
+destruct error. 2:{ trivial. }
+destruct_interpret_expr_irrel.
+trivial.
+Qed.
+(*
+
+Lemma interpret_stmt_fun_ctx_irrel {bigger_call_depth_bound smaller_call_depth_bound: nat}
+                                   (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+                                   {cd: calldag}
+                                   {fc1 fc2: fun_ctx cd bigger_call_depth_bound}
+                                   (FcOk: fun_name fc1 = fun_name fc2)
+                                   (do_call: forall
+                                                 (fc': fun_ctx cd smaller_call_depth_bound)
+                                                 (world: world_state)
+                                                 (arg_values: list uint256),
+                                               world_state * expr_result uint256)
+                                   (builtins: string -> option builtin)
+                                   (world: world_state)
+                                   (loc: string_map uint256)
+                                   (s: stmt)
+                                   (NotLocVar: is_local_var_decl s = false)
+                                   (CallOk1: let _ := string_set_impl in 
+                                                FSet.is_subset (stmt_callset s)
+                                                               (decl_callset (fun_decl fc1))
+                                                = true)
+                                   (CallOk2: let _ := string_set_impl in 
+                                                FSet.is_subset (stmt_callset s)
+                                                               (decl_callset (fun_decl fc2))
+                                                = true):
+  interpret_stmt Ebound fc1 do_call builtins world loc s NotLocVar CallOk1
+   =
+  interpret_stmt Ebound fc2 do_call builtins world loc s NotLocVar CallOk2.
+Proof.
+*)
 
 End Interpret.
