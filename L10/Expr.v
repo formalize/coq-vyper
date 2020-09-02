@@ -168,12 +168,8 @@ Fixpoint interpret_expr {bigger_call_depth_bound smaller_call_depth_bound: nat}
           end
    end eq_refl.
 
-(* An alternative to this #$@% would be to have proper Leibnitz equality on fun_ctx
-   or give up and bring in the proof irrelevance axiom.
-   Part of the problem is that there's no equality predicate on uint256s so far
-   because they can be represented by Zs.
-   There goes the hope for having an equality predicate on exprs/stmts/decls as well.
-   But this is an easy practice for induction on expr, so whatever.
+(* This is not needed as PropExtensionality covers it.
+   But this is an example of induction on expr.
  *)
 Lemma interpret_expr_fun_ctx_irrel {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                    (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)

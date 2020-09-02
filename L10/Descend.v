@@ -205,4 +205,60 @@ destruct (cd_declmap cd name). (* this is why fun_ctx_descend_inner exists *)
 trivial.
 Qed.
 
+Lemma fun_ctx_descend_none {call_depth_bound new_call_depth_bound}
+                           {cd: calldag}
+                           {e: expr}
+                           {name: string}
+                           {args: list expr}
+                           (fc: fun_ctx cd call_depth_bound)
+                           (CallOk: let _ := string_set_impl in
+                                       FSet.is_subset (expr_callset e)
+                                                      (decl_callset (fun_decl fc))
+                                        = true)
+                           (Ebound: call_depth_bound = S new_call_depth_bound)
+                           (E: e = PrivateOrBuiltinCall name args):
+  fun_ctx_descend fc CallOk Ebound E = None
+   <->
+  cd_declmap cd name = None.
+Proof.
+unfold fun_ctx_descend.
+assert (InnerOk: forall (d: decl) (Edecl: cd_declmap cd name = Some d),
+                   fun_ctx_descend_inner fc CallOk Ebound E Edecl = None
+                    <->
+                   cd_declmap cd name = None).
+{
+  intros. unfold fun_ctx_descend_inner.
+  assert (Ok := cd_depthmap_ok cd name).
+  remember (fun (depth: nat) (Edepth: cd_depthmap cd name = Some depth) =>
+    Some
+      {|
+      fun_name := name;
+      fun_depth := depth;
+      fun_depth_ok := Edepth;
+      fun_decl := d;
+      fun_decl_ok := Edecl;
+      fun_bound_ok := call_descend' fc CallOk Ebound E Edecl Edepth |}) as some_branch.
+  remember (fun Edepth : cd_depthmap cd name = None =>
+              False_rect (option (fun_ctx cd new_call_depth_bound))
+                         (fun_ctx_descend_helper Edecl Edepth))
+    as none_branch.
+  assert (SomeBranchOk: forall (depth: nat) (Edepth: cd_depthmap cd name = Some depth),
+                          some_branch depth Edepth <> None).
+  { now subst. }
+  assert (NoneBranchOk: forall (Edepth: cd_depthmap cd name = None),
+                          none_branch Edepth = None).
+  { intro. exfalso. exact (fun_ctx_descend_helper Edecl Edepth). }
+  clear Heqsome_branch Heqnone_branch.
+  rewrite Edecl in *.
+  destruct (cd_depthmap cd name). 2:{ contradiction. }
+  assert (S := SomeBranchOk n eq_refl).
+  split. { contradiction. }
+  intro. discriminate.
+} (* InnerOk *)
+remember fun_ctx_descend_inner as inner. clear Heqinner. revert inner InnerOk.
+destruct cd_declmap.
+{ intros. apply InnerOk. }
+intros. tauto.
+Qed.
+
 End Descend.
