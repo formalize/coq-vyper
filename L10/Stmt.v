@@ -64,7 +64,7 @@ Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_boun
                      | Some e => fun Ee =>
                         let (world'', result_e) :=
                            interpret_expr Ebound fc do_call builtins
-                                          world loc e
+                                          world' loc e
                                           (callset_descend_assert_error E Ee CallOk)
                         in match result_e with
                            | ExprSuccess value =>
