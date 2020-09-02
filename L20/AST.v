@@ -1,7 +1,7 @@
 From Coq Require Import String List.
 
 From Vyper Require Import Config FSet.
-From Vyper Require L10.AST L10.Interpret.
+From Vyper.L10 Require AST Base.
 
 Section AST.
 
@@ -63,7 +63,7 @@ Fixpoint expr_ind' (P: expr -> Prop)
  *)
 Inductive small_stmt
 := Pass
- | Abort (ab: L10.Interpret.abort)
+ | Abort (ab: L10.Base.abort)
  | Return (result: expr)
  | Raise (error: expr)
  | Assign (lhs: L10.AST.assignable) (rhs: expr)

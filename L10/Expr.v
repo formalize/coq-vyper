@@ -2,7 +2,7 @@ From Coq Require Import String Arith NArith ZArith Eqdep_dec.
 
 From Vyper Require FSet Map UInt256.
 
-From Vyper Require Import Config.
+From Vyper Require Import Config Calldag.
 From Vyper.L10 Require Import AST Base Callset Descend.
 
 Local Open Scope list_scope.

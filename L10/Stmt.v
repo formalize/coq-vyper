@@ -1,6 +1,6 @@
 From Coq Require Import String Arith NArith ZArith Eqdep_dec.
 
-From Vyper Require Import Config.
+From Vyper Require Import Config Calldag.
 From Vyper Require FSet Map UInt256.
 
 From Vyper.L10 Require Import AST Base Callset Descend Expr.
@@ -386,5 +386,38 @@ Fixpoint interpret_stmt_list {bigger_call_depth_bound smaller_call_depth_bound: 
               | _ => (world', loc', result)
               end) eq_refl
    end eq_refl.
+
+
+(*
+
+Lemma interpret_stmt_fun_ctx_irrel {bigger_call_depth_bound smaller_call_depth_bound: nat}
+                                   (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+                                   {cd: calldag}
+                                   {fc1 fc2: fun_ctx cd bigger_call_depth_bound}
+                                   (FcOk: fun_name fc1 = fun_name fc2)
+                                   (do_call: forall
+                                                 (fc': fun_ctx cd smaller_call_depth_bound)
+                                                 (world: world_state)
+                                                 (arg_values: list uint256),
+                                               world_state * expr_result uint256)
+                                   (builtins: string -> option builtin)
+                                   (world: world_state)
+                                   (loc: string_map uint256)
+                                   (s: stmt)
+                                   (NotLocVar: is_local_var_decl s = false)
+                                   (CallOk1: let _ := string_set_impl in 
+                                                FSet.is_subset (stmt_callset s)
+                                                               (decl_callset (fun_decl fc1))
+                                                = true)
+                                   (CallOk2: let _ := string_set_impl in 
+                                                FSet.is_subset (stmt_callset s)
+                                                               (decl_callset (fun_decl fc2))
+                                                = true):
+  interpret_stmt Ebound fc1 do_call builtins world loc s NotLocVar CallOk1
+   =
+  interpret_stmt Ebound fc2 do_call builtins world loc s NotLocVar CallOk2.
+Proof.
+*)
+
 
 End Stmt.

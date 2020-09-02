@@ -14,8 +14,8 @@ Graph/LongestPath.v
 Graph/Depthmap.v
 
 Config.v
-
 NaryFun.v
+Calldag.v
 
 L10/AST.v
 L10/UInt256.v
@@ -28,6 +28,9 @@ L10/Interpret.v
 
 L20/AST.v
 L20/Callset.v
+L20/Descend.v
+L20/Expr.v
+L20/Stmt.v
 L20/Interpret.v
 
 From10To20/Translate.v

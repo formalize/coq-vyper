@@ -1,16 +1,19 @@
-From Coq Require Import String Arith NArith ZArith Eqdep_dec.
-From Vyper Require Import Config NaryFun Calldag.
-From Vyper.L10 Require Import AST Callset.
-From Vyper Require FSet Map UInt256.
+From Coq Require Import ZArith String Eqdep_dec.
 
-Local Open Scope list_scope.
-Local Open Scope string_scope.
+From Vyper Require Import Config Calldag.
+From Vyper.L20 Require Import AST Callset.
 
 Section Descend.
 Context {C: VyperConfig}.
 
 Definition calldag := generic_calldag decl decl_callset.
 
+(* Unfortunately this is a huge duplication of L10/Descend.v due to the fact that L10 has this:
+     [E: e = PrivateOrBuiltinCall name args]
+   all over the place and L20 has this instead:
+     [E: e = PrivateCall name args]
+   and also [expr] and [expr_callset] are different.
+ *)
 
 Lemma call_descend {call_depth_bound new_call_depth_bound current_fun_depth: nat}
                    (DepthOk : current_fun_depth < call_depth_bound)
@@ -19,14 +22,14 @@ Lemma call_descend {call_depth_bound new_call_depth_bound current_fun_depth: nat
                    (this_decl: decl)
                    (this_decl_ok: cd_declmap cd this_fun_name = Some this_decl)
                    (current_fun_depth_ok:
-                     cd_depthmap cd this_fun_name = Some current_fun_depth)
+                      cd_depthmap cd this_fun_name = Some current_fun_depth)
                    (e: expr)
                    (CallOk: let _ := string_set_impl in
                              FSet.is_subset (expr_callset e) (decl_callset this_decl) = true)
                    (Ebound: call_depth_bound = S new_call_depth_bound)
                    {name: string}
                    {args: list expr}
-                   (E: e = PrivateOrBuiltinCall name args)
+                   (E: e = PrivateCall name args)
                    {depth: nat}
                    (Edepth: cd_depthmap cd name = Some depth):
   depth < new_call_depth_bound.
@@ -78,7 +81,7 @@ Local Lemma call_descend' {call_depth_bound new_call_depth_bound}
                                                      (decl_callset (fun_decl fc))
                                        = true)
                           (Ebound: call_depth_bound = S new_call_depth_bound)
-                          (E: e = PrivateOrBuiltinCall name args)
+                          (E: e = PrivateCall name args)
                           {d: decl}
                           (Edecl: cd_declmap cd name = Some d)
                           {depth: nat}
@@ -107,7 +110,7 @@ Local Definition fun_ctx_descend_inner {call_depth_bound new_call_depth_bound}
                                                       (decl_callset (fun_decl fc))
                                         = true)
                            (Ebound: call_depth_bound = S new_call_depth_bound)
-                           (E: e = PrivateOrBuiltinCall name args)
+                           (E: e = PrivateCall name args)
                            {d: decl}
                            (Edecl: cd_declmap cd name = Some d)
 := match cd_depthmap cd name as maybe_depth return _ = maybe_depth -> _ with
@@ -138,7 +141,7 @@ Definition fun_ctx_descend {call_depth_bound new_call_depth_bound}
                                                       (decl_callset (fun_decl fc))
                                         = true)
                            (Ebound: call_depth_bound = S new_call_depth_bound)
-                           (E: e = PrivateOrBuiltinCall name args)
+                           (E: e = PrivateCall name args)
 : option (fun_ctx cd new_call_depth_bound)
 := match cd_declmap cd name as maybe_decl return _ = maybe_decl -> _ with
    | None => fun _ =>
@@ -162,7 +165,7 @@ Lemma fun_ctx_descend_irrel {call_depth_bound new_call_depth_bound}
                                                        (decl_callset (fun_decl fc2))
                                          = true)
                             (Ebound: call_depth_bound = S new_call_depth_bound)
-                            (E: e = PrivateOrBuiltinCall name args):
+                            (E: e = PrivateCall name args):
   fun_ctx_descend fc1 CallOk1 Ebound E = fun_ctx_descend fc2 CallOk2 Ebound E.
 Proof.
 unfold fun_ctx_descend.
