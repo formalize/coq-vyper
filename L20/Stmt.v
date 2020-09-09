@@ -9,6 +9,31 @@ From Vyper.L20 Require Import AST Callset Descend Expr.
 Section Stmt.
 Context {C: VyperConfig}.
 
+
+Definition do_assign {return_type: Type}
+                     (cd: calldag)
+                     (world: world_state) (loc: string_map uint256)
+                     (lhs: L10.AST.assignable)
+                     (computed_rhs: expr_result uint256)
+: world_state * string_map uint256 * stmt_result return_type
+:= let _ := string_map_impl in
+   match computed_rhs with
+   | ExprAbort ab => (world, loc, StmtAbort ab)
+   | ExprSuccess a =>
+       match lhs with
+       | L10.AST.AssignableLocalVar name =>
+           match Map.lookup loc name with
+           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | Some _ => (world, Map.insert loc name a, StmtSuccess)
+           end
+       | L10.AST.AssignableStorageVar name =>
+           if storage_var_is_declared cd name
+             then (storage_insert world name a, loc, StmtSuccess)
+             else (world, loc, StmtAbort (AbortError "undeclared global variable"))
+       end
+   end.
+
+
 Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                 (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
                                 {cd: calldag}
@@ -50,7 +75,7 @@ Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_boun
         let (world', result) := interpret_expr Ebound fc do_call builtins
                                                world loc rhs
                                                (callset_descend_assign_rhs E CallOk)
-        in do_assign world' loc lhs result
+        in do_assign cd world' loc lhs result
    | ExprStmt e => fun E =>
                    let (world', result) := interpret_expr Ebound fc do_call builtins
                                                           world loc e

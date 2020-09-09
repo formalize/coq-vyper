@@ -11,6 +11,30 @@ Local Open Scope string_scope.
 Section Stmt.
 Context {C: VyperConfig}.
 
+
+Definition do_assign {return_type: Type}
+                     (cd: calldag)
+                     (world: world_state) (loc: string_map uint256)
+                     (lhs: assignable)
+                     (computed_rhs: expr_result uint256)
+: world_state * string_map uint256 * stmt_result return_type
+:= let _ := string_map_impl in
+   match computed_rhs with
+   | ExprAbort ab => (world, loc, StmtAbort ab)
+   | ExprSuccess a =>
+       match lhs with
+       | AssignableLocalVar name =>
+           match Map.lookup loc name with
+           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | Some _ => (world, Map.insert loc name a, StmtSuccess)
+           end
+       | AssignableStorageVar name =>
+           if storage_var_is_declared cd name
+             then (storage_insert world name a, loc, StmtSuccess)
+             else (world, loc, StmtAbort (AbortError "undeclared global variable"))
+       end
+   end.
+
 Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                 (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
                                 {cd: calldag}
@@ -29,7 +53,8 @@ Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_boun
                                                         (decl_callset (fun_decl fc))
                                          = true)
 : world_state * string_map uint256 * stmt_result uint256
-:= match s as s' return s = s' -> _ with
+:= let _ := string_map_impl in
+   match s as s' return s = s' -> _ with
    | Pass     => fun _ => (world, loc, StmtSuccess)
    | Break    => fun _ => (world, loc, StmtAbort AbortBreak)
    | Continue => fun _ => (world, loc, StmtAbort AbortContinue)
@@ -78,12 +103,53 @@ Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_boun
         let (world', result) := interpret_expr Ebound fc do_call builtins
                                                world loc rhs
                                                (callset_descend_assign_rhs E CallOk)
-        in do_assign world' loc lhs result
+        in do_assign cd world' loc lhs result
    | BinOpAssign lhs op rhs => fun E =>
-        let (world', result) := interpret_expr Ebound fc do_call builtins
-                                               world loc rhs
-                                               (callset_descend_binop_assign_rhs E CallOk)
-        in do_binop_assign world' loc lhs op result
+    (* we're doing Python semantics here, which means a += b is the same as a = a + b:
+
+        a = 10
+
+        def f():
+          global a
+          a = 20
+          return 5
+
+       a += f()
+       # now a == 15
+    *)
+       let compute_rhs (old_val: uint256)
+                       (on_success: world_state ->
+                                    uint256 ->
+                                    world_state * string_map uint256 * stmt_result uint256)
+           : world_state * string_map uint256 * stmt_result uint256
+           := let (world', result) := interpret_expr Ebound fc do_call builtins
+                                                     world loc rhs
+                                                     (callset_descend_binop_assign_rhs E CallOk)
+              in match result with
+                 | ExprSuccess val => match interpret_binop op old_val val with
+                                      | ExprSuccess new_val => on_success world' new_val
+                                      | ExprAbort ab => (world', loc, StmtAbort ab)
+                                      end
+                 | ExprAbort ab => (world', loc, StmtAbort ab)
+                 end
+       in match lhs with
+       | AssignableLocalVar name =>
+           match Map.lookup loc name with
+           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | Some old_val =>
+               compute_rhs old_val
+                 (fun new_world new_val => (new_world, Map.insert loc name new_val, StmtSuccess))
+           end
+       | AssignableStorageVar name =>
+           if storage_var_is_declared cd name
+             then compute_rhs
+                   (match storage_lookup world name with
+                    | None => zero256
+                    | Some old_val => old_val
+                    end)
+                    (fun new_world new_val => (storage_insert new_world name new_val, loc, StmtSuccess))
+             else (world, loc, StmtAbort (AbortError "undeclared global variable"))
+       end
    | ExprStmt e => fun E =>
                    let (world', result) := 
                       interpret_expr Ebound fc do_call builtins
@@ -94,45 +160,6 @@ Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_boun
                                     | ExprAbort ab => StmtAbort ab
                                     end)
    end eq_refl.
-
-Lemma interpret_small_stmt_fun_ctx_irrel {bigger_call_depth_bound smaller_call_depth_bound: nat}
-                                         (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
-                                         {cd: calldag}
-                                         {fc1 fc2: fun_ctx cd bigger_call_depth_bound}
-                                         (FcOk: fun_name fc1 = fun_name fc2)
-                                         (do_call: forall
-                                                       (fc': fun_ctx cd smaller_call_depth_bound)
-                                                       (world: world_state)
-                                                       (arg_values: list uint256),
-                                                     world_state * expr_result uint256)
-                                         (builtins: string -> option builtin)
-                                         (world: world_state)
-                                         (loc: string_map uint256)
-                                         (ss: small_stmt)
-                                         (CallOk1: let _ := string_set_impl in 
-                                                      FSet.is_subset (small_stmt_callset ss)
-                                                                     (decl_callset (fun_decl fc1))
-                                                      = true)
-                                         (CallOk2: let _ := string_set_impl in 
-                                                      FSet.is_subset (small_stmt_callset ss)
-                                                                     (decl_callset (fun_decl fc2))
-                                                      = true):
-  interpret_small_stmt Ebound fc1 do_call builtins world loc ss CallOk1
-   =
-  interpret_small_stmt Ebound fc2 do_call builtins world loc ss CallOk2.
-Proof.
-revert world loc.
-destruct ss; intros; cbn; try easy; try destruct result;
-  try destruct_interpret_expr_irrel; trivial;
-  try destruct_let_pair.
-(* assert *)
-destruct e. 2:{ trivial. }
-destruct (Z_of_uint256 value =? 0)%Z. 2:{ trivial. }
-destruct error. 2:{ trivial. }
-destruct_interpret_expr_irrel.
-trivial.
-Qed.
-
 
 Local Lemma var_decl_helper {s: stmt} {name init}
                             (NotVarDecl: is_local_var_decl s = false)

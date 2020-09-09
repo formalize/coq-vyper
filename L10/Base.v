@@ -49,61 +49,6 @@ Definition interpret_binop (op: binop) (a b: uint256)
 
 (*************************************************************************************************)
 
-Definition do_assign {return_type: Type} 
-                     (world: world_state) (loc: string_map uint256)
-                     (lhs: assignable)
-                     (computed_rhs: expr_result uint256)
-: world_state * string_map uint256 * stmt_result return_type
-:= let _ := string_map_impl in
-   match computed_rhs with
-   | ExprAbort ab => (world, loc, StmtAbort ab)
-   | ExprSuccess a =>
-       match lhs with
-       | AssignableLocalVar name =>
-           match Map.lookup loc name with
-           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
-           | Some _ => (world, Map.insert loc name a, StmtSuccess)
-           end
-       | AssignableStorageVar name =>
-           match storage_lookup world name with
-           | None => (world, loc, StmtAbort (AbortError "undeclared global variable"))
-           | Some _ => (storage_insert world name a, loc, StmtSuccess)
-           end
-       end
-   end.
-
-Definition do_binop_assign {return_type: Type} 
-                           (world: world_state) (loc: string_map uint256)
-                           (lhs: assignable)
-                           (op: binop)
-                           (computed_rhs: expr_result uint256)
-: world_state * string_map uint256 * stmt_result return_type
-:= let _ := string_map_impl in
-   match computed_rhs with
-   | ExprAbort ab => (world, loc, StmtAbort ab)
-   | ExprSuccess a =>
-       match lhs with
-       | AssignableLocalVar name =>
-           match Map.lookup loc name with
-           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
-           | Some old_val =>
-                match interpret_binop op old_val a with
-                | ExprSuccess new_val => (world, Map.insert loc name new_val, StmtSuccess)
-                | ExprAbort ab => (world, loc, StmtAbort ab)
-                end
-           end
-       | AssignableStorageVar name =>
-           match storage_lookup world name with
-           | None => (world, loc, StmtAbort (AbortError "undeclared global variable"))
-           | Some old_val =>
-                match interpret_binop op old_val a with
-                | ExprSuccess new_val => (storage_insert world name new_val, loc, StmtSuccess)
-                | ExprAbort ab => (world, loc, StmtAbort ab)
-                end
-           end
-       end
-   end.
-
 Definition map_lookup {Value} (m: string_map Value) := let _ := string_map_impl in Map.lookup m.
 Definition map_insert {Value} (m: string_map Value) := let _ := string_map_impl in Map.insert m.
 Definition map_remove {Value} (m: string_map Value) := let _ := string_map_impl in Map.remove m.

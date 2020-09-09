@@ -7,6 +7,18 @@ From Vyper Require L10.AST L20.AST L10.Interpret L20.Interpret.
 
 From Vyper.From10To20 Require Import Translate Callset FunCtx.
 
+Lemma storage_var_is_declared_ok {C: VyperConfig}
+                                 (cd: L10.Descend.calldag)
+                                 (name: string):
+  L20.Expr.storage_var_is_declared (translate_calldag cd) name
+   =
+  L10.Expr.storage_var_is_declared cd name.
+Proof.
+unfold L20.Expr.storage_var_is_declared. unfold L10.Expr.storage_var_is_declared.
+cbn. destruct cd_declmap; trivial.
+now destruct d.
+Qed.
+
 Lemma interpret_translated_expr {C: VyperConfig}
                                 {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                 (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
@@ -33,12 +45,13 @@ Lemma interpret_translated_expr {C: VyperConfig}
                                 (loc: string_map uint256)
                                 {e10: L10.AST.expr}
                                 {e20: L20.AST.expr}
-                                (ExprOk: e20 = let is_private_call := fun name: string =>
-                                                  match cd_declmap cd name with
-                                                  | Some _ => true
-                                                  | _ => false
-                                                  end
-                                               in translate_expr is_private_call e10)
+                                (ExprOk: e20 = translate_expr 
+                                                 (fun name: string =>
+                                                   match cd_declmap cd name with
+                                                   | Some _ => true
+                                                   | _ => false
+                                                   end)
+                                                e10)
                                 (CallOk20: let _ := string_set_impl in 
                                    FSet.is_subset (L20.Callset.expr_callset e20)
                                                   (L20.Callset.decl_callset
@@ -59,7 +72,11 @@ Proof.
 revert e20 ExprOk CallOk20 world loc. induction e10 using L10.AST.expr_ind'; intros.
 { (* Const *) now subst. }
 { (* LocalVar *) now subst. }
-{ (* StorageVar *) now subst. }
+{ (* StorageVar *)
+  subst. cbn.
+  rewrite storage_var_is_declared_ok.
+  now destruct L10.Expr.storage_var_is_declared.
+}
 { (* UnOp *)
   subst. cbn.
   rewrite (IHe10 (L10.Callset.callset_descend_unop eq_refl CallOk10)); trivial.

@@ -24,6 +24,15 @@ Ltac destruct_if
 Section Expr.
 Context {C: VyperConfig}.
 
+Definition storage_var_is_declared (cd: calldag)
+                                   (name: string)
+: bool
+:= match cd_declmap cd name with
+   | Some (StorageVarDecl _) => true
+   | _ => false
+   end.
+
+
 Fixpoint interpret_expr {bigger_call_depth_bound smaller_call_depth_bound: nat}
                         (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
                         {cd: calldag}
@@ -74,13 +83,15 @@ Fixpoint interpret_expr {bigger_call_depth_bound smaller_call_depth_bound: nat}
    | LocalVar name => fun _ =>
        (world, match map_lookup loc name with
                | Some val => ExprSuccess val
-               | None => expr_error "Local variable not found"
+               | None => expr_error "undeclared local variable"
                end)
-   | StorageVar name => fun _ => 
-       (world, match storage_lookup world name with
-               | Some val => ExprSuccess val
-               | None => expr_error "Storage variable not found"
-               end)
+   | StorageVar name => fun _ =>
+     if storage_var_is_declared cd name
+        then (world, ExprSuccess (match storage_lookup world name with
+                                  | None => zero256
+                                  | Some x => x
+                                  end))
+        else (world, expr_error "undeclared global variable")
    | UnOp op a => fun E =>
        let (world', result) := interpret_expr Ebound fc do_call builtins
                                               world loc a
