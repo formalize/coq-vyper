@@ -156,6 +156,9 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                      (callset_descend_stmt_if_then E CallOk)
            end
     | Loop var start count fc_body => fun E =>
+        match map_lookup loc var with
+        | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
+        | None =>
         let (world', result_start) :=
               interpret_expr Ebound fc do_call builtins
                              world loc start
@@ -187,21 +190,20 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                  (world', loc'', StmtSuccess)
                              | _ => (world', loc'', result)
                              end
-                    end
-               in match map_lookup loc var with
-               | Some _ => (world', loc, StmtAbort (AbortError "loop var already exists"))
-               | None => let count_z := Z_of_uint256 count in
-                         let count_nat := Z.to_nat count_z in
-                         let start_z := Z_of_uint256 start_value in
-                         let last := (start_z + count_z - 1)%Z in
-                         if (Z_of_uint256 (uint256_of_Z last) =? last)%Z
-                           then
-                             interpret_loop_rec
-                               world' loc start_z count_nat var
-                               (callset_descend_loop_body E CallOk)
-                           else (world, loc, StmtAbort (AbortError "loop range overflows"))
-               end
+                    end 
+               in let count_z := Z_of_uint256 count in
+                   let count_nat := Z.to_nat count_z in
+                   let start_z := Z_of_uint256 start_value in
+                   let last := (start_z + count_z - 1)%Z in
+                   if (Z_of_uint256 (uint256_of_Z last) =? last)%Z
+                     then let '(world', loc', result') :=
+                                 interpret_loop_rec
+                                   world' loc start_z count_nat var
+                                   (callset_descend_loop_body E CallOk)
+                          in (world', map_remove loc' var, result')
+                     else (world, loc, StmtAbort (AbortError "loop range overflows"))
            end
+        end
     end eq_refl.
 
 End Stmt.

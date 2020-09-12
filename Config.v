@@ -10,9 +10,24 @@ Class VyperConfig := {
   uint256: Type;
   Z_of_uint256: uint256 -> Z;
   uint256_of_Z: Z -> uint256;
+  uint256_ok: forall z: Z, Z_of_uint256 (uint256_of_Z z) = (z mod 2^256)%Z;
+  uint256_range: forall u: uint256, (0 <= Z_of_uint256 u < 2^256)%Z;
   storage_lookup: world_state -> string -> option uint256;
   storage_insert: world_state -> string -> uint256 -> world_state;
 }.
+
+Lemma two_to_256_ne_0: (2^256 <> 0)%Z.
+Proof.
+apply Z.pow_nonzero. { discriminate. }
+rewrite<- Z.leb_le. trivial.
+Qed.
+
+Lemma two_to_256_pos: (0 < 2^256)%Z.
+Proof.
+apply Z.pow_pos_nonneg.
+{ rewrite<- Z.ltb_lt. trivial. }
+rewrite<- Z.leb_le. trivial.
+Qed.
 
 Definition sample_config
 := {|
@@ -22,8 +37,10 @@ Definition sample_config
       string_map_impl := Map.string_avl_map_impl;
       world_state := Map.string_avl_map Z;
       uint256 := Z;
-      Z_of_uint256 := id;
+      Z_of_uint256 u := (u mod 2^256)%Z;
       uint256_of_Z z := (z mod 2^256)%Z;
+      uint256_ok z := Z.mod_mod _ _ two_to_256_ne_0;
+      uint256_range u := Z.mod_pos_bound _ _ two_to_256_pos;
       storage_lookup := let _ := Map.string_avl_map_impl in Map.lookup;
       storage_insert := let _ := Map.string_avl_map_impl in Map.insert;
    |}.

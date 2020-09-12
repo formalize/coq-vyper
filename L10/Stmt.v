@@ -343,7 +343,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                            let '(world', loc', result) :=
                              interpret_loop_rec
                                world' loc start_z count_nat
-                           in (world', map_remove loc var, result)
+                           in (world', map_remove loc' var, result)
                          else (world, loc, StmtAbort (AbortError "loop range overflows"))
                    end
          end
