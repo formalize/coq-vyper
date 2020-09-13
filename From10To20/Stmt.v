@@ -662,17 +662,22 @@ induction s10 using L10.AST.stmt_ind'; intros.
   trivial.
 }
 2:{ (* fixed count loop *)
-  cbn. expr.
+  cbn.
+
+  (* checks *)
   destruct (map_lookup loc var). { trivial. }
+  destruct (Z_of_uint256 count =? 0)%Z. { easy. }
+  expr.
   L10.Expr.destruct_let_pair. destruct e. 2:{ trivial. }
   remember
     (Z_of_uint256 (uint256_of_Z (Z_of_uint256 value + Z_of_uint256 count - 1)) 
      =? 
     Z_of_uint256 value + Z_of_uint256 count - 1)%Z as overflow_check.
   destruct overflow_check. 2:{ trivial. }
+
+  (* preparing induction *)
   remember (Z.to_nat (Z_of_uint256 count)) as n.
   remember (Z_of_uint256 value + Z_of_uint256 count - 1)%Z as cap.
-
   (* Here Heqcap is the main loop equation: [
 
         cap = Z_of_uint256 value + Z_of_uint256 count - 1
@@ -697,7 +702,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
   { left. exact Heqcap. }
   clear Heqcap.
   revert count NotVarDecl CallOk10 CallOk20 Heqn w loc value WeakMainLoopEq.
-  induction n. { easy. }
+  induction n. { easy. }  (* --- induction --- *)
   intros.
 
   (* checking that the counter doesn't go below 0 *)
@@ -721,6 +726,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
     exact (Z.lt_trans _ _ _ (Z.lt_succ_diag_r (Z.of_nat n)) (proj2 R)).
   }
 
+  (* first iteration *)
   assert (G: let _ := string_set_impl in
              FSet.is_subset (Callset.stmt_callset (translate_stmt_list is_private_call body))
                (Callset.decl_callset (fun_decl (translate_fun_ctx fc eq_refl))) = true).
@@ -793,6 +799,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
   rewrite V in Heqlhs.
   clear V W G.
 
+  (* fixing stuff before looking into the result of the first iteration *)
   assert (CapRange: (0 <= cap < 2 ^ 256)%Z).
   {
     symmetry in Heqoverflow_check. rewrite Z.eqb_eq in Heqoverflow_check.
@@ -948,7 +955,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
     rewrite<- ValueOk.
     apply IHn'.
   }
-  (* abort *)
+  (* iteration aborted *)
   destruct a; try easy.
   (* continue (XXX dup from above) *)
   assert (IHn' := IHn count' eq_refl CallOk10 CallOk20 CountOk 
@@ -977,106 +984,217 @@ induction s10 using L10.AST.stmt_ind'; intros.
   apply IHn'.
 }
 (* fixed range loop *)
-cbn. destruct (map_lookup loc var). { trivial. }
+cbn.
 fold interpret_stmt_list'. fold translate_stmt_list'.
 remember (match start with
           | Some x => x
           | None => zero256
-          end) as start256.
-
-
-
-L10.Expr.destruct_let_pair. destruct e. 2:{ trivial. }
-remember
-  (Z_of_uint256 (uint256_of_Z (Z_of_uint256 value + Z_of_uint256 count - 1)) 
-   =? 
-  Z_of_uint256 value + Z_of_uint256 count - 1)%Z as overflow_check.
-destruct overflow_check. 2:{ trivial. }
-remember (Z.to_nat (Z_of_uint256 count)) as n.
-remember (Z_of_uint256 value + Z_of_uint256 count - 1)%Z as cap.
-
-(*
-
-
-Theorem interpret_translated_call {C: VyperConfig}
-                                  (builtins: string -> option L10.Interpret.builtin)
-                                  {cd: L10.Interpret.calldag}
-                                  {call_depth_bound: nat}
-                                  (fc: L10.Interpret.fun_ctx cd call_depth_bound)
-                                  {cd2: L20.Interpret.calldag}
-                                  (ok: cd2 = translate_calldag cd)
-                                  (world: world_state)
-                                  (arg_values: list uint256):
-  L20.Interpret.interpret_call builtins (translate_fun_ctx fc ok) world arg_values
-   =
-  L10.Interpret.interpret_call builtins fc world arg_values.
-Proof.
-induction call_depth_bound.
-{ exfalso. exact (Nat.nlt_0_r _ (L10.Interpret.fun_bound_ok _ _ fc)). }
-pose (is_private_call := fun name: string =>
-          match L10.Interpret.cd_declmap _ _ cd name with
-          | Some _ => true
-          | _ => false
-          end).
-assert(F: L20.Interpret.fun_decl _ _ (translate_fun_ctx fc ok)
-           = 
-          translate_decl is_private_call (L10.Interpret.fun_decl _ _ fc)).
+          end) as start_u.
+remember (match start with
+          | Some x => Z_of_uint256 x
+          | None => 0%Z
+          end) as start_z.
+assert (U: start_z = Z_of_uint256 start_u).
 {
-  clear IHcall_depth_bound.
-  unfold translate_fun_ctx in *. cbn in *.
-  unfold cached_translated_decl in *.
-  remember (translate_fun_ctx_fun_decl_helper fc ok) as foo. clear Heqfoo.
-  remember (Interpret.cd_declmap cd2 (L10.Interpret.fun_name cd (S call_depth_bound) fc)) as d.
-  destruct d. 2:{ contradiction. }
-  subst. cbn in Heqd.
-  remember (L10.Interpret.cd_declmap L10.AST.decl L10.Callset.decl_callset cd
-                                     (L10.Interpret.fun_name cd (S call_depth_bound) fc)) as x.
-  destruct x. 2:{ discriminate. }
-  inversion Heqd. unfold is_private_call.
-  f_equal. inversion Heqx.
-  assert (D := L10.Interpret.fun_decl_ok _ _ fc).
-  rewrite D in *. inversion H1. (* XXX *)
-  trivial.
+  subst. destruct start. { trivial. }
+  unfold zero256. now rewrite uint256_ok.
 }
-unfold L20.Interpret.interpret_call.
-unfold L10.Interpret.interpret_call.
-rewrite F.
+repeat rewrite<- U.
+destruct (map_lookup loc var). { trivial. }
+remember (Z_of_uint256 stop <=? start_z)%Z as loop_is_bad.
+destruct loop_is_bad. { unfold zero256. now rewrite uint256_ok. }
+symmetry in Heqloop_is_bad. apply Z.leb_gt in Heqloop_is_bad.
+assert (StopMinusStart:
+          (Z_of_uint256 (uint256_of_Z (Z_of_uint256 stop - start_z))
+            =
+           Z_of_uint256 stop - start_z)%Z).
+{
+  rewrite U.
+  assert (StartRange := uint256_range start_u).
+  assert (StopRange := uint256_range stop).
+  rewrite uint256_ok.
+  rewrite Z.mod_small; lia.
+}
+repeat rewrite StopMinusStart.
 
+assert (EmptyLoopCheckPassed: (Z_of_uint256 stop - start_z =? 0)%Z = false).
+{
+  apply Z.eqb_neq.
+  lia.
+}
+rewrite EmptyLoopCheckPassed.
+assert (OverflowCheckPassed: (Z_of_uint256
+     (uint256_of_Z (start_z + (Z_of_uint256 stop - start_z) - 1)) =?
+   start_z + (Z_of_uint256 stop - start_z) - 1)%Z = true).
+{
+  rewrite uint256_ok.
+  assert (StartRange := uint256_range start_u).
+  assert (StopRange := uint256_range stop).
+  rewrite Z.mod_small. { now apply Z.eqb_eq. }
+  lia.
+}
+rewrite OverflowCheckPassed.
 
+(* induction *)
+remember (Z.to_nat (Z_of_uint256 stop - start_z)) as n.
+clear Heqstart_z Heqstart_u.
+clear NotVarDecl.
 
+assert (MainLoopEquation: Z.of_nat n = (Z_of_uint256 stop - start_z)%Z).
+{
+  subst n. 
+  rewrite Z2Nat.id. { trivial. }
+  rewrite uint256_ok in StopMinusStart.
+  rewrite Z.mod_small_iff in StopMinusStart. { lia. }
+  discriminate.
+}
 
+assert (StartNonneg: (0 <= start_z)%Z).
+{
+  assert (StartRange := uint256_range start_u).
+  lia.
+}
+revert MainLoopEquation StartNonneg CallOk10 CallOk20 world loc.
+clear U EmptyLoopCheckPassed OverflowCheckPassed Heqn Heqloop_is_bad.
+revert start_z StopMinusStart.
+induction n. { easy. }  (* --- induction --- *)
+intros.
 
+(* first iteration *)
+assert (G: let _ := string_set_impl in
+           FSet.is_subset (Callset.stmt_callset (translate_stmt_list is_private_call body))
+             (Callset.decl_callset (fun_decl (translate_fun_ctx fc eq_refl))) = true).
+{ rewrite<- P. apply (L20.Callset.callset_descend_loop_body eq_refl CallOk20). }
 
-  intro H. clear H.
-  
-  
-  
-remember  as d10.
+assert (L: AllOk body).
+{
+  unfold AllOk.
+  rewrite List.Forall_forall.
+  rewrite List.Forall_forall in H.
+  intros.
+  now apply H.
+}
+mark.
+assert (W := weak_stmt_list_ok eq_refl builtins fc DoCallOk world
+             (map_insert loc var (uint256_of_Z start_z))
+             G
+             (L10.Callset.callset_descend_fixed_range_loop_body eq_refl CallOk10)
+             L).
 
+fold is_private_call in W. 
+fold translate_stmt_list' in Heqlhs.
+rewrite interpret_stmt_list_alt in Heqrhs.
+destruct L10.Stmt.interpret_stmt_list as ((world', loc'), result').
 
-unfold translate_fun_ctx. unfold cached_translated_decl.
-remember (L10.Interpret.fun_name _ _ fc) as fun_name.
+(* This hairball is copied from Heqlhs.
+   It looks like [
+               Stmt.interpret_stmt eq_refl (translate_fun_ctx fc eq_refl) do_call_20 builtins world
+               (map_insert loc var (uint256_of_Z start_z)) (translate_stmt_list' body)
+               (Callset.callset_descend_loop_body eq_refl CallOk20)
+  ] but if I write just that then it doesn't match. *)
+assert (V: @Stmt.interpret_stmt C (S smaller_call_depth_bound) smaller_call_depth_bound
+               (@eq_refl nat (S smaller_call_depth_bound)) (@translate_calldag C cd)
+               (@translate_fun_ctx C (S smaller_call_depth_bound) cd fc (@translate_calldag C cd)
+                  (@eq_refl (@Descend.calldag C) (@translate_calldag C cd))) do_call_20 builtins world
+               (@map_insert C (@uint256 C) loc var (@uint256_of_Z C start_z))
+               (translate_stmt_list' body)
+               (@Callset.callset_descend_loop_body C
+                  (@AST.Loop C var (@AST.Const C start_u)
+                     (@uint256_of_Z C (@Z_of_uint256 C stop - start_z)) (translate_stmt_list' body))
+                  (translate_stmt_list' body) var (@AST.Const C start_u)
+                  (@uint256_of_Z C (@Z_of_uint256 C stop - start_z))
+                  (@Callset.decl_callset C
+                     (@cached_translated_decl C (S smaller_call_depth_bound) cd fc
+                        (@translate_calldag C cd)
+                        (@eq_refl (@Descend.calldag C) (@translate_calldag C cd))))
+                  (@eq_refl (@AST.stmt C)
+                     (@AST.Loop C var (@AST.Const C start_u)
+                        (@uint256_of_Z C (@Z_of_uint256 C stop - start_z)) 
+                        (translate_stmt_list' body))) CallOk20)
+           = (world', loc', result')).
+{
+  (* Strangely, what worked above for FixedCountLoop doesn't work here.
+     Here's something else instead:
+   *)
+  remember (@Callset.callset_descend_loop_body C
+     (@AST.Loop C var (@AST.Const C start_u) (@uint256_of_Z C (@Z_of_uint256 C stop - start_z))
+        (translate_stmt_list' body)) (translate_stmt_list' body) var (@AST.Const C start_u)
+     (@uint256_of_Z C (@Z_of_uint256 C stop - start_z))
+     (@Callset.decl_callset C
+        (@cached_translated_decl C (S smaller_call_depth_bound) cd fc (@translate_calldag C cd)
+           (@eq_refl (@Descend.calldag C) (@translate_calldag C cd))))
+     (@eq_refl (@AST.stmt C)
+        (@AST.Loop C var (@AST.Const C start_u) (@uint256_of_Z C (@Z_of_uint256 C stop - start_z))
+           (translate_stmt_list' body))) CallOk20) as F.
+  rewrite<- W. clear W Heqlhs Heqrhs HeqF.
+  revert G F. rewrite<- translate_stmt_list_alt. intros.
+  assert (E: F = G).
+  { apply PropExtensionality.proof_irrelevance. }
+  subst F. trivial.
+}
+rewrite V in Heqlhs.
+clear V W G.
 
-unfold translate_fun_ctx.
+pose (start_z' := Z.succ start_z).
+assert (NextMainLoopEquation: Z.of_nat n = (Z_of_uint256 stop - start_z')%Z) by lia.
 
+fold interpret_stmt_list'.
+fold interpret_stmt_list' in IHn.
+fold translate_stmt_list' in IHn.
 
+assert (NextStopMinusStart:
+          (Z_of_uint256 (uint256_of_Z (Z_of_uint256 stop - start_z'))
+            =
+           Z_of_uint256 stop - start_z')%Z).
+{
+  rewrite uint256_ok.
+  apply Z.mod_small.
+  split. { lia. }
+  assert (StopRange := uint256_range stop).
+  lia.
+}
 
+assert (NextStartNonneg: (0 <= start_z')%Z) by lia.
 
+assert (IHn' := IHn start_z' NextStopMinusStart NextMainLoopEquation NextStartNonneg
+                    CallOk10 CallOk20).
+assert (Fix20:
+  @Callset.callset_descend_loop_body C
+              (@AST.Loop C var (@AST.Const C start_u)
+                 (@uint256_of_Z C (@Z_of_uint256 C stop - start_z')) (translate_stmt_list' body))
+              (translate_stmt_list' body) var (@AST.Const C start_u)
+              (@uint256_of_Z C (@Z_of_uint256 C stop - start_z'))
+              (@Callset.decl_callset C
+                 (@cached_translated_decl C (S smaller_call_depth_bound) cd fc
+                    (@translate_calldag C cd)
+                    (@eq_refl (@Descend.calldag C) (@translate_calldag C cd))))
+              (@eq_refl (@AST.stmt C)
+                 (@AST.Loop C var (@AST.Const C start_u)
+                    (@uint256_of_Z C (@Z_of_uint256 C stop - start_z')) (translate_stmt_list' body)))
+              CallOk20
+  =
+ @Callset.callset_descend_loop_body C
+                    (@AST.Loop C var (@AST.Const C start_u)
+                       (@uint256_of_Z C (@Z_of_uint256 C stop - start_z)) 
+                       (translate_stmt_list' body)) (translate_stmt_list' body) var
+                    (@AST.Const C start_u) (@uint256_of_Z C (@Z_of_uint256 C stop - start_z))
+                    (@Callset.decl_callset C
+                       (@cached_translated_decl C (S smaller_call_depth_bound) cd fc
+                          (@translate_calldag C cd)
+                          (@eq_refl (@Descend.calldag C) (@translate_calldag C cd))))
+                    (@eq_refl (@AST.stmt C)
+                       (@AST.Loop C var (@AST.Const C start_u)
+                          (@uint256_of_Z C (@Z_of_uint256 C stop - start_z))
+                          (translate_stmt_list' body))) CallOk20).
+{ apply PropExtensionality.proof_irrelevance. }
+rewrite Fix20 in IHn'.
 
-Theorem translate_ok {C: VyperConfig}
-                     (builtins: string -> option L10.Interpret.builtin)
-                     (cd: L10.Interpret.calldag)
-                     (fun_name: string)
-                     (world: world_state)
-                     (arg_values: list uint256):
-  L20.Interpret.interpret builtins (translate_calldag cd) fun_name world arg_values
-   =
-  L10.Interpret.interpret builtins cd fun_name world arg_values.
-Proof.
-unfold L10.Interpret.interpret. unfold L20.Interpret.interpret.
-remember (L10.Interpret.cd_declmap cd fun_name) as d. 
-unfold translate_calldag.
-unfold L20.Interpret.make_fun_ctx_and_bound. cbn.
-revert translate_dag_helper.
-destruct d.
-*)
+(* looking at the result of the first iteration *)
+destruct result'; subst lhs rhs. 3:{ trivial. }
+{
+  (* successful first iteration *)
+  apply IHn'.
+}
+(* first iteration aborted *)
+now destruct a.
+Qed.

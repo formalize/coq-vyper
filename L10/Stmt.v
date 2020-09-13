@@ -297,7 +297,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                  then (* ... with STOP being a greater value than START ...
                          https://vyper.readthedocs.io/en/stable/control-structures.html#for-loops
                       *)
-                      (world, loc, StmtAbort (AbortError "empty fixed range loop"))
+                      (world, loc, StmtAbort (AbortError "empty loop not allowed"))
                  else let '(world', loc', result) :=
                              interpret_loop_rec world loc start_z
                                                 (Z.to_nat (stop_z - start_z)%Z)
@@ -327,10 +327,13 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
              end
       in match map_lookup loc var with
          | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
-         | None => let (world', result_start) :=
-                      interpret_expr Ebound fc do_call builtins
-                                     world loc start
-                                     (callset_descend_fixed_count_loop_start E CallOk)
+         | None =>
+            if (Z_of_uint256 count =? 0)%Z
+              then (world, loc, StmtAbort (AbortError "empty loop not allowed"))
+              else let (world', result_start) :=
+                          interpret_expr Ebound fc do_call builtins
+                                         world loc start
+                                         (callset_descend_fixed_count_loop_start E CallOk)
                    in match result_start with
                    | ExprAbort ab => (world', loc, StmtAbort ab)
                    | ExprSuccess start_value =>
@@ -346,7 +349,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                            in (world', map_remove loc' var, result)
                          else (world, loc, StmtAbort (AbortError "loop range overflows"))
                    end
-         end
+             end
   end eq_refl.
 
 Fixpoint interpret_stmt_list {bigger_call_depth_bound smaller_call_depth_bound: nat}
@@ -413,38 +416,5 @@ Fixpoint interpret_stmt_list {bigger_call_depth_bound smaller_call_depth_bound: 
               | _ => (world', loc', result)
               end) eq_refl
    end eq_refl.
-
-
-(*
-
-Lemma interpret_stmt_fun_ctx_irrel {bigger_call_depth_bound smaller_call_depth_bound: nat}
-                                   (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
-                                   {cd: calldag}
-                                   {fc1 fc2: fun_ctx cd bigger_call_depth_bound}
-                                   (FcOk: fun_name fc1 = fun_name fc2)
-                                   (do_call: forall
-                                                 (fc': fun_ctx cd smaller_call_depth_bound)
-                                                 (world: world_state)
-                                                 (arg_values: list uint256),
-                                               world_state * expr_result uint256)
-                                   (builtins: string -> option builtin)
-                                   (world: world_state)
-                                   (loc: string_map uint256)
-                                   (s: stmt)
-                                   (NotLocVar: is_local_var_decl s = false)
-                                   (CallOk1: let _ := string_set_impl in 
-                                                FSet.is_subset (stmt_callset s)
-                                                               (decl_callset (fun_decl fc1))
-                                                = true)
-                                   (CallOk2: let _ := string_set_impl in 
-                                                FSet.is_subset (stmt_callset s)
-                                                               (decl_callset (fun_decl fc2))
-                                                = true):
-  interpret_stmt Ebound fc1 do_call builtins world loc s NotLocVar CallOk1
-   =
-  interpret_stmt Ebound fc2 do_call builtins world loc s NotLocVar CallOk2.
-Proof.
-*)
-
 
 End Stmt.

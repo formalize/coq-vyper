@@ -118,7 +118,9 @@ Fixpoint translate_stmt (s: L10.AST.stmt)
                            end
          in L20.AST.Loop var
                           (L20.AST.Const start)
-                          (uint256_of_Z (Z_of_uint256 stop - Z_of_uint256 start)%Z)
+                          (if (Z_of_uint256 stop <=? Z_of_uint256 start)%Z
+                             then zero256
+                             else uint256_of_Z (Z_of_uint256 stop - Z_of_uint256 start)%Z)
                           (translate_stmt_list body)
    | L10.AST.FixedCountLoop var start count body =>
         L20.AST.Loop var (translate_expr start) count (translate_stmt_list body)
