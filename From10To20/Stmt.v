@@ -1198,3 +1198,65 @@ destruct result'; subst lhs rhs. 3:{ trivial. }
 (* first iteration aborted *)
 now destruct a.
 Qed.
+
+(* We can now strengthen weak_stmt_list_ok to remove ItemsOk assumption. *)
+Lemma interpret_translated_stmt_list {C: VyperConfig}
+                  {bigger_call_depth_bound smaller_call_depth_bound: nat}
+                  (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+                  {cd: L10.Descend.calldag}
+                  (builtins: string -> option builtin)
+                  (fc: fun_ctx cd bigger_call_depth_bound)
+                  {do_call_10: forall
+                        (fc': fun_ctx cd smaller_call_depth_bound)
+                        (world: world_state)
+                        (arg_values: list uint256),
+                      world_state * expr_result uint256}
+                  {do_call_20: forall
+                        (fc': fun_ctx (translate_calldag cd) smaller_call_depth_bound)
+                        (world: world_state)
+                        (arg_values: list uint256),
+                      world_state * expr_result uint256}
+                  (DoCallOk: forall fc' world arg_values,
+                               do_call_20 (translate_fun_ctx fc' eq_refl) world arg_values
+                                =
+                               do_call_10 fc' world arg_values)
+                  (world: world_state)
+                  (loc: string_map uint256)
+                  {list10: list L10.AST.stmt}
+                  (CallOk20: let _ := string_set_impl in 
+                             let is_private_call := fun name: string =>
+                                      match cd_declmap cd name with
+                                      | Some _ => true
+                                      | _ => false
+                                      end in
+                           FSet.is_subset (L20.Callset.stmt_callset
+                                            (translate_stmt_list is_private_call list10))
+                                          (L20.Callset.decl_callset
+                                             (fun_decl
+                                               (translate_fun_ctx fc eq_refl)))
+                     = true)
+                  (CallOk10: let _ := string_set_impl in 
+                     FSet.is_subset (L10.Callset.stmt_list_callset list10)
+                                    (L10.Callset.decl_callset
+                                      (fun_decl fc))
+                     = true):
+  let is_private_call := fun name: string =>
+                            match cd_declmap cd name with
+                            | Some _ => true
+                            | _ => false
+                            end in
+  L20.Stmt.interpret_stmt Ebound (translate_fun_ctx fc eq_refl) do_call_20 builtins world loc
+    (translate_stmt_list is_private_call list10) CallOk20
+   =
+  L10.Stmt.interpret_stmt_list Ebound fc do_call_10 builtins world loc list10 CallOk10.
+Proof.
+apply weak_stmt_list_ok. { apply DoCallOk. }
+(* we're doing ItemsOk argument from weak_stmt_list_ok *)
+rewrite List.Forall_forall.
+intro s.
+intro foo; clear foo. (* s is in list *)
+clear CallOk20 CallOk10 world loc.
+intros is_private_call NotVarDecl CallOk20 CallOk10 world loc.
+apply interpret_translated_stmt. { apply DoCallOk. }
+trivial.
+Qed.
