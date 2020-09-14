@@ -43,12 +43,7 @@ Definition small_stmt_callset (s: small_stmt)
 
 Fixpoint stmt_callset (s: stmt)
 := let _ := string_set_impl in
-   let fix stmt_list_callset (stmts: list stmt)
-       := match stmts with
-          | nil => empty
-          | (h :: t)%list => union (stmt_callset h) (stmt_list_callset t)
-          end
-   in match s with
+   match s with
    | SmallStmt a => small_stmt_callset a
    | LocalVarDecl _ e scope => union (expr_callset e) (stmt_callset scope)
    | IfElseStmt cond yes no => union (expr_callset cond)
