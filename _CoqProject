@@ -6,6 +6,7 @@ StringCmp.v
 FSet.v
 Map.v
 MapSig.v
+OpenArray.v
 
 Graph/Path.v
 Graph/Cycle.v
@@ -43,6 +44,7 @@ From10To20/Call.v
 L30/AST.v
 L30/Callset.v
 L30/Descend.v
+L30/Stmt.v
 
 From20To30/Translate.v
 

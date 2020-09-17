@@ -1,5 +1,5 @@
 From Coq Require Import String ZArith CyclicAxioms ZModulo.
-Require FSet Map.
+Require FSet Map OpenArray.
 
 Class VyperConfig := {
   string_set: Type;
@@ -14,6 +14,8 @@ Class VyperConfig := {
   uint256_range: forall u: uint256, (0 <= Z_of_uint256 u < 2^256)%Z;
   storage_lookup: world_state -> string -> option uint256;
   storage_insert: world_state -> string -> uint256 -> world_state;
+  memory: Type;
+  memory_impl: OpenArray.class (uint256_of_Z 0%Z) memory;
 }.
 
 Lemma two_to_256_ne_0: (2^256 <> 0)%Z.
@@ -43,6 +45,8 @@ Definition sample_config
       uint256_range u := Z.mod_pos_bound _ _ two_to_256_pos;
       storage_lookup := let _ := Map.string_avl_map_impl in Map.lookup;
       storage_insert := let _ := Map.string_avl_map_impl in Map.insert;
+      memory := list Z;
+      memory_impl := OpenArray.list_inst 0%Z;
    |}.
 
 Definition zero256 {C: VyperConfig} := uint256_of_Z 0%Z.

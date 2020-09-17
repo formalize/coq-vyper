@@ -326,9 +326,9 @@ Proof.
 descend ok.
 Qed.
 
-Lemma callset_descend_loop_body {s: stmt} {body: stmt} {var start stop}
+Lemma callset_descend_loop_body {s: stmt} {body: stmt} {var start count}
                                 {allowed_calls: string_set}
-                                (E: s = Loop var start stop body)
+                                (E: s = Loop var start count body)
                                 (ok: let _ := string_set_impl in
                                      FSet.is_subset (stmt_callset s) allowed_calls = true):
   let _ := string_set_impl in
