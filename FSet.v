@@ -559,6 +559,15 @@ split; intro H. { congruence. }
 symmetry in H. contradiction.
 Qed.
 
+Lemma singleton_iff (x y: M):
+  has (singleton x) y = if E x y then true else false.
+Proof.
+  destruct E. { rewrite singleton_ok. exact e. }
+  remember (has _ _) as h. symmetry in Heqh. destruct h.
+  { now rewrite singleton_ok in Heqh. }
+  trivial.
+Qed.
+
 Lemma is_empty_true (a: S) (H: is_empty a = true) (x: M):
   has a x = false.
 Proof.
