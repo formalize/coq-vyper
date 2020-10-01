@@ -28,8 +28,8 @@ tauto.
 Qed.
 
 Class class {Key: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
-             (Value: Type)
-             (M: Type)
+            (Value: Type)
+            (M: Type)
 := {
   lookup: M -> Key -> option Value;
 
@@ -73,6 +73,15 @@ Class class {Key: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
     match lookup newer key with
     | Some value => Some value
     | None => lookup older key
+    end;
+
+  map_endo (m: M) (f: Value -> Value): M;
+  map_endo_ok (m: M) (f: Value -> Value) (key: Key):
+    lookup (map_endo m f) key
+     =
+    match lookup m key with
+    | Some value => Some (f value)
+    | None => None
     end;
 }.
 
@@ -307,6 +316,27 @@ destruct (string_dec k key). { subst. contradiction. }
 apply IHa.
 Qed.
 
+Lemma string_avl_map_map_endo_ok {Value: Type}
+                                 (m: StringAVLMap.t Value)
+                                 (f: Value -> Value)
+                                 (key : StringAVLMap.key):
+  StringAVLMap.find key (StringAVLMap.map f m)
+   =
+  match StringAVLMap.find key m with
+  | Some value => Some (f value)
+  | None => None
+  end.
+Proof.
+assert (M1 := @StringAVLMap.map_1 Value Value m key).
+assert (M2 := @StringAVLMap.map_2 Value Value m key f).
+remember (StringAVLMap.find key m) as y. destruct y as [y|].
+{ apply (StringAVLMap.find_1 (M1 y f (StringAVLMap.find_2 (eq_sym Heqy)))). }
+apply string_avl_map_find_none.
+symmetry in Heqy. rewrite string_avl_map_find_none in Heqy.
+unfold StringAVLMap.In in M2. unfold StringAVLMap.Raw.In0 in M2.
+firstorder.
+Qed.
+
 Definition string_avl_map_impl (Value: Type): class string_dec Value (string_avl_map Value)
 := {|
      lookup map key := StringAVLMap.find key map;
@@ -323,6 +353,8 @@ Definition string_avl_map_impl (Value: Type): class string_dec Value (string_avl
      items_nodup := string_avl_map_items_nodup;
      merge := string_avl_map_merge;
      merge_ok := string_avl_map_merge_ok;
+     map_endo m f := StringAVLMap.map f m;
+     map_endo_ok := string_avl_map_map_endo_ok;
    |}.
 
 Section MapFacts.

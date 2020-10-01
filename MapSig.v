@@ -293,6 +293,32 @@ rewrite Map.merge_ok.
 trivial.
 Qed.
 
+
+Local Lemma map_endo_spec (m: t) (f: Value -> Value) (key: Key):
+  match Map.lookup (Map.map_endo (proj1_sig m) f) key with
+  | Some _ => KeyIsGood key = true
+  | None => True
+  end.
+Proof.
+rewrite Map.map_endo_ok.
+assert (C := proj2_sig m key).
+now destruct Map.lookup.
+Qed.
+
+Definition map_endo (m: t) (f: Value -> Value)
+: t
+:= exist _ (Map.map_endo (proj1_sig m) f) (map_endo_spec m f).
+
+Lemma map_endo_ok (m: t) (f: Value -> Value) (key: key_sig):
+   lookup (map_endo m f) key = match lookup m key with
+                               | Some value => Some (f value)
+                               | None => None
+                               end.
+Proof.
+unfold map_endo. unfold lookup. cbn.
+apply Map.map_endo_ok.
+Qed.
+
 Instance instance: Map.class key_sig_eq_dec Value t
 := {| Map.lookup      := lookup
     ; Map.is_empty    := is_empty
@@ -308,6 +334,8 @@ Instance instance: Map.class key_sig_eq_dec Value t
     ; Map.items_nodup := items_nodup
     ; Map.merge       := merge
     ; Map.merge_ok    := merge_ok
+    ; Map.map_endo    := map_endo
+    ; Map.map_endo_ok := map_endo_ok
    |}.
 
 End MapSig.
