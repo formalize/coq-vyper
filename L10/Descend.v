@@ -40,6 +40,7 @@ assert(HasName: let _ := string_set_impl in FSet.has (decl_callset this_decl) na
 }
 clear CallOk. cbn in HasName.
 assert (K := cd_depthmap_ok cd this_fun_name).
+unfold cd_declmap in this_decl_ok.
 rewrite this_decl_ok in K.
 rewrite current_fun_depth_ok in K.
 cbn in K.
@@ -61,6 +62,7 @@ Local Lemma fun_ctx_descend_helper {cd: calldag}
   cd_depthmap cd name <> None.
 Proof.
 assert (D := cd_depthmap_ok cd name).
+unfold cd_declmap in Edecl.
 rewrite Edecl in D.
 intro H.
 rewrite H in D.
@@ -249,6 +251,7 @@ assert (InnerOk: forall (d: decl) (Edecl: cd_declmap cd name = Some d),
                           none_branch Edepth = None).
   { intro. exfalso. exact (fun_ctx_descend_helper Edecl Edepth). }
   clear Heqsome_branch Heqnone_branch.
+  unfold cd_declmap in *.
   rewrite Edecl in *.
   destruct (cd_depthmap cd name). 2:{ contradiction. }
   assert (S := SomeBranchOk n eq_refl).

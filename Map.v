@@ -27,6 +27,26 @@ remember (KeyEqDec query k) as e. destruct e.
 tauto.
 Qed.
 
+Definition alist_map {Key Value Value': Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
+                     (a: list (Key * Value)) (f: Value -> Value')
+: list (Key * Value')
+:= List.map (fun p: Key * Value => let (k, v) := p in (k, f v)) a.
+
+Lemma alist_map_ok {Key Value Value': Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
+                   (a: list (Key * Value)) (f: Value -> Value') (query: Key):
+  alist_lookup KeyEqDec (alist_map KeyEqDec a f) query
+   =
+  match alist_lookup KeyEqDec a query with
+  | Some v => Some (f v)
+  | None => None
+  end.
+Proof.
+induction a. { easy. }
+cbn. destruct a as (k, v).
+destruct (KeyEqDec query k). { trivial. }
+apply IHa.
+Qed.
+
 Class class {Key: Type} (KeyEqDec: forall x y: Key, {x = y} + {x <> y})
             (Value: Type)
             (M: Type)
@@ -358,29 +378,55 @@ Definition string_avl_map_impl (Value: Type): class string_dec Value (string_avl
    |}.
 
 Section MapFacts.
+  Context {Key: Type} {KeyEqDec: forall x y: Key, {x = y} + {x <> y}}
+          {Value: Type}
+          {M: Type}
+          {MapImpl: class KeyEqDec Value M}.
 
-Context {Key: Type} {KeyEqDec: forall x y: Key, {x = y} + {x <> y}}
-        {Value: Type}
-        {M: Type}
-        {MapImpl: class KeyEqDec Value M}.
+  Lemma empty_lookup (query: Key):
+    lookup empty query = None.
+  Proof.
+  apply is_empty_ok.
+  apply empty_ok.
+  Qed.
 
-Lemma empty_lookup (query: Key):
-  lookup empty query = None.
-Proof.
-apply is_empty_ok.
-apply empty_ok.
-Qed.
+  Definition of_alist (l: list (Key * Value))
+  : M
+  := fold_right (fun (p: Key * Value) m => let (k, v) := p in insert m k v) empty l.
 
-Definition of_alist (l: list (Key * Value))
-: M
-:= fold_right (fun (p: Key * Value) m => let (k, v) := p in insert m k v) empty l.
-
-Lemma of_alist_ok (l: list (Key * Value)) (query: Key):
-  lookup (of_alist l) query = alist_lookup KeyEqDec l query.
-Proof.
-induction l. { cbn. now apply empty_lookup. }
-cbn. destruct a as (k, v). rewrite insert_ok.
-destruct (KeyEqDec k query); destruct (KeyEqDec query k); try contradiction; subst; easy.
-Qed.
-
+  Lemma of_alist_ok (l: list (Key * Value)) (query: Key):
+    lookup (of_alist l) query = alist_lookup KeyEqDec l query.
+  Proof.
+  induction l. { cbn. now apply empty_lookup. }
+  cbn. destruct a as (k, v). rewrite insert_ok.
+  destruct (KeyEqDec k query); destruct (KeyEqDec query k); try contradiction; subst; easy.
+  Qed.
 End MapFacts.
+
+Section MapMap.
+  Context {Key: Type} {KeyEqDec: forall x y: Key, {x = y} + {x <> y}}
+          {Value: Type}
+          {M: Type}
+          {MapImpl: class KeyEqDec Value M}
+          {Value': Type} {M': Type} {MapImpl': class KeyEqDec Value' M'}.
+
+  (* This is not efficient but the types put us in a bind. *)
+  Definition map (m: M) (f: Value -> Value')
+  : M'
+  := of_alist (alist_map KeyEqDec (items m) f).
+
+  Lemma map_ok (m: M) (f: Value -> Value') (key: Key):
+    lookup (map m f) key
+     =
+    match lookup m key with
+    | Some value => Some (f value)
+    | None => None
+    end.
+  Proof.
+  unfold map.
+  rewrite of_alist_ok.
+  rewrite alist_map_ok.
+  rewrite items_ok.
+  trivial.
+  Qed.
+End MapMap.

@@ -7,17 +7,15 @@ From Vyper.From10To20 Require Import Translate Callset.
 
 Local Lemma translate_calldag_helper {C: VyperConfig}
                                      (cd: L10.Descend.calldag):
+  let _ := string_map_impl in
   let is_private_call (name: string)
    := match cd_declmap cd name with
       | Some _ => true
       | _ => false
-      end 
+      end
   in forall name: string,
        match
-          match cd_declmap cd name with
-          | Some f => Some (translate_decl is_private_call f)
-          | None => None
-          end
+         Map.lookup (Map.map (cd_decls cd) (fun d => translate_decl is_private_call d)) name
        with
        | Some decl =>
            match cd_depthmap cd name with
@@ -34,11 +32,12 @@ Local Lemma translate_calldag_helper {C: VyperConfig}
        | None => True
        end.
 Proof.
-intros is_private_call name.
+intros MapImpl is_private_call name.
 assert (D := cd_depthmap_ok cd name).
+rewrite Map.map_ok.
 cbn.
-remember (cd_declmap cd name) as maybe_f. destruct maybe_f. 2:easy.
-destruct (cd_depthmap cd name). 2:easy.
+remember (Map.lookup (cd_decls cd) name) as maybe_f. destruct maybe_f. 2:easy.
+destruct (cd_depthmap cd name). 2:{ easy. }
 rewrite FSet.for_all_ok in *. intros x H.
 rewrite callset_translate_decl in H.
 apply Bool.andb_true_iff in H.
@@ -50,9 +49,6 @@ apply Nat.lt_succ_r. exact Q.
 Qed.
 
 
-(* This is inefficient since functions are translated at each lookup.
-   It's better to rebuild the calldag.
- *)
 Definition translate_calldag {C: VyperConfig} (cd: L10.Descend.calldag)
 : L20.Descend.calldag
 := let is_private_call (name: string)
@@ -60,14 +56,27 @@ Definition translate_calldag {C: VyperConfig} (cd: L10.Descend.calldag)
       | Some _ => true
       | _ => false
       end
-   in {| cd_declmap (name: string) :=
-              match cd_declmap cd name with
-              | Some f => Some (translate_decl is_private_call f)
-              | None => None
-              end
+   in {| cd_decls := Map.map (cd_decls cd)
+                             (fun d => translate_decl is_private_call d)
        ; cd_depthmap := cd_depthmap cd
        ; cd_depthmap_ok := translate_calldag_helper cd
       |}.
+
+Lemma translate_calldag_ok {C: VyperConfig} (cd: L10.Descend.calldag) (name: string):
+  let is_private_call (name: string)
+   := match cd_declmap cd name with
+      | Some _ => true
+      | _ => false
+      end
+  in cd_declmap (translate_calldag cd) name 
+      =
+     match cd_declmap cd name with
+     | Some f => Some (translate_decl is_private_call f)
+     | None => None
+     end.
+Proof.
+unfold cd_declmap. cbn. rewrite Map.map_ok. trivial.
+Qed.
 
 (***************************************************************************************************)
 
@@ -92,7 +101,7 @@ Section FunCtx.
   Proof.
   intro E.
   assert (Ok := fun_decl_ok fc).
-  subst cd2. cbn in E. rewrite Ok in E. discriminate.
+  subst cd2. cbn in E. rewrite translate_calldag_ok in E. rewrite Ok in E. discriminate.
   Qed.
 
   Definition cached_translated_decl

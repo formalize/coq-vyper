@@ -15,7 +15,8 @@ Lemma storage_var_is_declared_ok {C: VyperConfig}
   L10.Expr.storage_var_is_declared cd name.
 Proof.
 unfold L20.Expr.storage_var_is_declared. unfold L10.Expr.storage_var_is_declared.
-cbn. destruct cd_declmap; trivial.
+rewrite translate_calldag_ok.
+destruct cd_declmap; trivial.
 now destruct d.
 Qed.
 
@@ -272,9 +273,11 @@ destruct d; cbn;
           unfold cached_translated_decl. cbn.
           remember (FunCtx.translate_fun_ctx_fun_decl_helper _ eq_refl) as Bad. clear HeqBad.
           cbn in Bad. revert Bad.
+          rewrite (translate_calldag_ok cd name).
           rewrite Edecl1.
           intro Bad. clear Bad.
-          unfold translate_calldag in Edecl2. cbn in Edecl2. rewrite Edecl1 in Edecl2.
+          rewrite (translate_calldag_ok cd name) in Edecl2.
+          rewrite Edecl1 in Edecl2.
           symmetry in Edecl2. inversion Edecl2. trivial.
         }
         subst. f_equal; apply PropExtensionality.proof_irrelevance.
@@ -299,7 +302,7 @@ destruct d; cbn;
     destruct maybe_d1; destruct maybe_d2; intros. 4:{ trivial. }
     { apply InnerOk. }
     1-2: exfalso; clear inner10 inner20 InnerOk.
-    1-2: unfold translate_calldag in Heqmaybe_d2; cbn in Heqmaybe_d2; 
+    1-2: rewrite translate_calldag_ok in Heqmaybe_d2;
            rewrite<- Heqmaybe_d1 in Heqmaybe_d2; discriminate.
   } (* D *)
   rewrite D.

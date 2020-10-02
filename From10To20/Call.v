@@ -37,7 +37,7 @@ assert(F: cached_translated_decl fc ok
   remember (FunCtx.translate_fun_ctx_fun_decl_helper fc ok) as foo. clear Heqfoo.
   remember (cd_declmap cd2 (fun_name fc)) as d.
   destruct d. 2:{ contradiction. }
-  subst. cbn in Heqd.
+  subst. rewrite translate_calldag_ok in Heqd.
   remember (cd_declmap cd (fun_name fc)) as x.
   destruct x. 2:{ discriminate. }
   inversion Heqd. unfold is_private_call.
@@ -258,44 +258,14 @@ assert (SomeBranchOk: forall d Ed' Ed,
                                 | None => false
                                 end) d =
         match
-          match cd_declmap cd fun_name with
-          | Some f =>
-              Some
-                (translate_decl
-                   (fun name : string => match cd_declmap cd name with
-                                         | Some _ => true
-                                         | None => false
-                                         end) f)
-          | None => None
-          end as d'
-          return
-            (match cd_declmap cd fun_name with
-             | Some f =>
-                 Some
-                   (translate_decl
-                      (fun name : string => match cd_declmap cd name with
-                                            | Some _ => true
-                                            | None => false
-                                            end) f)
-             | None => None
-             end = d' -> AST.decl)
+          cd_declmap (translate_calldag cd) fun_name as d'
+          return (cd_declmap (translate_calldag cd) fun_name = d' -> AST.decl)
         with
         | Some f =>
-            fun
-              _ : match cd_declmap cd fun_name with
-                  | Some f0 =>
-                      Some
-                        (translate_decl
-                           (fun name : string =>
-                            match cd_declmap cd name with
-                            | Some _ => true
-                            | None => false
-                            end) f0)
-                  | None => None
-                  end = Some f => f
+            fun _ => f
         | None => false_branch
         end eq_refl).
-      { now rewrite Ed. }
+      { rewrite translate_calldag_ok. now rewrite Ed. }
       apply X.
     }
     assert (FunCtxEq: forall name1 depth depth_ok1 decl1 decl_ok1 bound_ok1
@@ -362,21 +332,15 @@ assert (SomeBranchOk: forall d Ed' Ed,
   apply K.
 }
 cbn in *.
-remember (fun _ : match cd_declmap cd fun_name with
-                  | Some f =>
-                      Some
-                        (translate_decl
-                           (fun name : string =>
-                            match cd_declmap cd name with
-                            | Some _ => true
-                            | None => false
-                            end) f)
-                  | None => None
-                  end = None => None) as lhs_none_branch.
+remember (fun _: _ = None => None) as lhs_none_branch.
 assert (NoneBranchOk: forall E, lhs_none_branch E = None).
 { subst. trivial. }
 clear Heqlhs_some_branch Heqrhs_some_branch Heqlhs_none_branch.
-now destruct (cd_declmap cd fun_name).
+assert (T := translate_calldag_ok cd fun_name).
+destruct (cd_declmap cd fun_name); destruct (cd_declmap (translate_calldag cd) fun_name);
+  try easy.
+inversion T.
+now subst.
 Qed.
 
 Theorem translate_ok {C: VyperConfig}

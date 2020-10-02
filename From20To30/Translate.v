@@ -195,3 +195,46 @@ Fixpoint translate_stmt {C: VyperConfig}
       | inr a', inr b' => inr (L30.AST.Semicolon a' b')
       end
    end.
+
+Fixpoint make_varmap_rec {C: VyperConfig}
+                         (current: string_map N)
+                         (offset: N)
+                         (arg_names: list string)
+{struct arg_names}
+: string + string_map N
+:= let _ := string_map_impl in
+   match arg_names with
+   | nil => inr current
+   | (h :: t)%list =>
+      match Map.lookup current h with
+      | Some _ => inl "duplicate argument name"
+      | None => make_varmap_rec (Map.insert current h offset) (N.succ offset) t
+      end
+   end.
+
+Definition make_varmap {C: VyperConfig} (arg_names: list string)
+:= let _ := string_map_impl in
+   make_varmap_rec Map.empty 0%N arg_names.
+
+Definition translate_decl {C: VyperConfig} (d: L20.AST.decl)
+: string + L30.AST.decl
+:= match d with
+   | L20.AST.StorageVarDecl name => inr (L30.AST.StorageVarDecl name)
+   | L20.AST.FunDecl name arg_names body =>
+      match make_varmap arg_names with
+      | inl err => inl err
+      | inr varmap =>
+          let nargs := N.of_nat (List.length arg_names) in
+          match translate_stmt varmap nargs body with
+          | inl err => inl err
+          | inr body' => inr (L30.AST.FunDecl name nargs body')
+          end
+      end
+   end.
+
+Fixpoint decl_names {C: VyperConfig} (decls: list L20.AST.decl)
+:= List.map L20.AST.decl_name decls.
+
+Definition decl_set {C: VyperConfig} (decls: list L20.AST.decl)
+: string_set
+:= let _ := string_set_impl in FSet.from_list (decl_names decls).

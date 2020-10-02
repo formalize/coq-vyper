@@ -251,3 +251,28 @@ rewrite (IHs20_1 _ _ _ (eq_sym Heqs20_1')).
 now rewrite (IHs20_2 _ _ _ (eq_sym Heqs20_2')).
 Qed.
 
+Lemma callset_translate_decl {C: VyperConfig}
+                             (d20: L20.AST.decl)
+                             (d30: L30.AST.decl)
+                             (E: translate_decl d20 = inr d30)
+                             (x: string):
+  let _ := string_set_impl in
+  FSet.has (L30.Callset.decl_callset d30) x
+   =
+  FSet.has (L20.Callset.decl_callset d20) x.
+Proof.
+unfold L30.Callset.decl_callset.
+unfold L20.Callset.decl_callset.
+destruct d30, d20; cbn in E; try easy.
+{ (* function got translated to a variable *)
+  destruct make_varmap. { discriminate. }
+  destruct translate_stmt. { discriminate. }
+  now inversion E.
+}
+destruct make_varmap as [|varmap]. { discriminate. }
+remember (translate_stmt varmap (N.of_nat (Datatypes.length args)) _) as s30.
+destruct s30. { discriminate. }
+symmetry in Heqs30.
+inversion E; subst.
+apply (callset_translate_stmt _ _ Heqs30).
+Qed.

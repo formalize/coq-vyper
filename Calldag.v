@@ -2,11 +2,12 @@ From Coq Require Import String Arith.
 From Vyper Require Import Config.
 
 Record generic_calldag {C: VyperConfig} (decl_type: Type) (callset: decl_type -> string_set) := {
-  cd_declmap:  string -> option decl_type;
+  cd_decls: string_map decl_type;
   cd_depthmap: string -> option nat;
   cd_depthmap_ok:
+    let _ := string_map_impl in
     forall name: string,
-      match cd_declmap name with
+      match Map.lookup cd_decls name with
       | None => True
       | Some decl =>
           match cd_depthmap name with
@@ -22,9 +23,15 @@ Record generic_calldag {C: VyperConfig} (decl_type: Type) (callset: decl_type ->
             end
       end;
 }.
-Arguments cd_declmap {C decl_type callset}.
+Arguments cd_decls {C decl_type callset}.
 Arguments cd_depthmap {C decl_type callset}.
 Arguments cd_depthmap_ok {C decl_type callset}.
+
+(* This is for compatibility with an older definition via cd_declmap. *)
+Definition cd_declmap {C: VyperConfig} {decl_type: Type} {callset: decl_type -> string_set}
+                      (d: generic_calldag decl_type callset)
+:= let _ := string_map_impl in
+   Map.lookup (cd_decls d).
 
 (**
   A functional context is the result of looking up a function by name in a calldag.
@@ -59,6 +66,7 @@ Local Lemma make_fun_ctx_helper {C: VyperConfig}
   False.
 Proof.
 assert (W := cd_depthmap_ok cd name).
+unfold cd_declmap in Ed.
 rewrite Ed in W. rewrite Edepth in W. exact W.
 Qed.
 
