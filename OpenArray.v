@@ -36,6 +36,15 @@ Class class {Value: Type} (Zero: Value) (A: Type) := {
                   get (from_list l) n = List.nth (N.to_nat n) l Zero;
 }.
 
+Lemma put_same {Value: Type} {Zero: Value} {A: Type} (C: class Zero A)
+               (a: A) (n: N) (v: Value):
+  get (put a n v) n = v.
+Proof.
+rewrite put_ok.
+enough (H: (n =? n)%N = true) by now rewrite H.
+now apply N.eqb_eq.
+Qed.
+
 Fixpoint firstn_or_pad {A} (l: list A) (n: nat) (pad: A)
 : list A
 := match n, l with

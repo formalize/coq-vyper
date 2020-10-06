@@ -35,15 +35,23 @@ Definition interpret_small_stmt {C: VyperConfig}
    | Const dst val => fun _ => (world, OpenArray.put loc dst val, StmtSuccess)
    | Copy dst src => fun _ => (world, OpenArray.put loc dst (OpenArray.get loc src), StmtSuccess)
    | StorageGet dst name => fun _ =>
-        (world,
-         OpenArray.put loc dst
-                  (match storage_lookup world name with
-                   | Some val => val
-                   | None => zero256
-                   end),
-         StmtSuccess)
+        match cd_declmap cd name with
+        | Some (StorageVarDecl _) =>
+            (world,
+             OpenArray.put loc dst
+                      (match storage_lookup world name with
+                       | Some val => val
+                       | None => zero256
+                       end),
+             StmtSuccess)
+        | _ => (world, loc, StmtAbort (AbortError "undeclared global variable"))
+        end
    | StoragePut name src => fun _ =>
-        (storage_insert world name (OpenArray.get loc src), loc, StmtSuccess)
+        match cd_declmap cd name with
+        | Some (StorageVarDecl _) =>
+           (storage_insert world name (OpenArray.get loc src), loc, StmtSuccess)
+        | _ => (world, loc, StmtAbort (AbortError "undeclared global variable"))
+        end
    | UnOp op dst src => fun _ =>
         match interpret_unop op (OpenArray.get loc src) with
         | ExprSuccess result => (world, OpenArray.put loc dst result, StmtSuccess)

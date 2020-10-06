@@ -173,3 +173,42 @@ Fixpoint interpret_expr {C: VyperConfig}
                 end
               end
        end eq_refl.
+
+Fixpoint interpret_expr_list {C: VyperConfig}
+                        {bigger_call_depth_bound smaller_call_depth_bound: nat}
+                        (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+                        {cd: calldag}
+                        (fc: fun_ctx cd bigger_call_depth_bound)
+                        (do_call: forall
+                                      (fc': fun_ctx cd smaller_call_depth_bound)
+                                      (world: world_state)
+                                      (arg_values: list uint256),
+                                    world_state * expr_result uint256)
+                        (builtins: string -> option builtin)
+                        (world: world_state)
+                        (loc: string_map uint256)
+                        (e: list expr)
+                        (CallOk: let _ := string_set_impl in 
+                                 FSet.is_subset (expr_list_callset e)
+                                                (decl_callset (fun_decl fc))
+                                 = true)
+      {struct e}
+      : world_state * expr_result (list uint256)
+      := match e as e' return e = e' -> _ with
+         | nil => fun _ => (world, ExprSuccess nil)
+         | (h :: t)%list => fun E =>
+             let (world', result_h) := interpret_expr Ebound fc do_call builtins
+                                                      world loc h
+                                                      (callset_descend_head E CallOk)
+             in match result_h with
+                | ExprAbort ab => (world', ExprAbort ab)
+                | ExprSuccess x =>
+                   let (world'', result_t) := interpret_expr_list Ebound fc do_call builtins
+                                                                  world' loc t
+                                                                  (callset_descend_tail E CallOk)
+                   in (world'', match result_t with
+                                | ExprAbort _ => result_t
+                                | ExprSuccess y => ExprSuccess (x :: y)%list
+                                end)
+                 end
+         end eq_refl.
