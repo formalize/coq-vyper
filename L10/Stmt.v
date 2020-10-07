@@ -222,7 +222,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                            in match result with
                               | ExprSuccess value =>
                                   let '(world2, loc2, result2) :=
-                                    interpret_stmt_list world (map_insert loc name value) t
+                                    interpret_stmt_list world' (map_insert loc name value) t
                                                         (callset_descend_stmt_tail E CallOk)
                                   in (world2, map_remove loc2 name, result2)
                               | ExprAbort ab => (world', loc, StmtAbort ab)
@@ -397,7 +397,7 @@ Fixpoint interpret_stmt_list {bigger_call_depth_bound smaller_call_depth_bound: 
                       | ExprSuccess value =>
                           let '(world2, loc2, result2) :=
                             interpret_stmt_list Ebound fc do_call builtins
-                                                world (map_insert loc name value) t
+                                                world' (map_insert loc name value) t
                                                 (callset_descend_stmt_tail E CallOk)
                           in (world2, map_remove loc2 name, result2)
                       | ExprAbort ab => (world', loc, StmtAbort ab)

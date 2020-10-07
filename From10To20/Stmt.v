@@ -354,7 +354,7 @@ destruct init.
   expr. destruct L10.Expr.interpret_expr as (w,[result|abort]). 2:trivial.
   (* why can't I match goal with let '(_, _, _) := ... ? *)
   remember (L20.Stmt.interpret_stmt _ _ _ _ _ _ _ _) as lhs.
-  remember (Stmt.interpret_stmt_list Ebound fc do_call_10 builtins world 
+  remember (Stmt.interpret_stmt_list Ebound fc do_call_10 builtins w
                                      (map_insert loc name result) list10
                                      (Callset.callset_descend_stmt_tail eq_refl CallOk10)) as rhs.
   assert (G: lhs = rhs). { subst. apply IHlist10. apply TailOk. }
@@ -431,8 +431,8 @@ pose (is_private_call :=
                                       | None => false
                                       end).
 pose (interpret_stmt_list' := fix
-   interpret_stmt_list (world0 : world_state) (loc0 : string_map uint256) (stmts : list L10.AST.stmt)
-                       (CallOk : FSet.is_subset (Callset.stmt_list_callset stmts)
+ interpret_stmt_list (world0 : world_state) (loc0 : string_map uint256) (stmts : list L10.AST.stmt)
+                     (CallOk : FSet.is_subset (Callset.stmt_list_callset stmts)
                                  (L10.Callset.decl_callset (fun_decl fc)) = true) {struct stmts} :
    world_state * string_map uint256 * stmt_result uint256 :=
    match
@@ -465,7 +465,7 @@ pose (interpret_stmt_list' := fix
                  | (world', ExprSuccess value0) =>
                      let
                      '(world2, loc2, result2) :=
-                      interpret_stmt_list world0
+                      interpret_stmt_list world'
                         (map_insert loc0 (fst (AST.var_decl_unpack h Evar)) value0) t
                         (Callset.callset_descend_stmt_tail E CallOk) in
                       (world2, map_remove loc2 (fst (AST.var_decl_unpack h Evar)), result2)

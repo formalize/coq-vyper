@@ -132,7 +132,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
               | ExprSuccess value =>
                   let '(world2, loc2, result2) :=
                     interpret_stmt Ebound fc do_call builtins
-                                   world (map_insert loc name value) scope
+                                   world' (map_insert loc name value) scope
                                    (callset_descend_var_scope E CallOk)
                   in (world2, map_remove loc2 name, result2)
               | ExprAbort ab =>
