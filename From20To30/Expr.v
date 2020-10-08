@@ -179,19 +179,22 @@ Lemma weak_interpret_translated_exprs {C: VyperConfig}
              CallOk30 : let H := string_set_impl in
                         FSet.is_subset (Callset.stmt_callset s30)
                           (Callset.decl_callset (fun_decl (translate_fun_ctx fc ok))) = true,
-           let H := string_map_impl in
-           let H0 := memory_impl in
+           let _ := string_map_impl in
+           let _ := memory_impl in
            let
            '(world30, mem30, result30) :=
             Stmt.interpret_stmt Ebound (translate_fun_ctx fc ok) do_call_30 builtins world locmem s30
-              CallOk30 in
-            match L20.Expr.interpret_expr Ebound fc do_call_20 builtins world locmap e CallOk20 with
-            | (world20, ExprSuccess value20) =>
-                result30 = StmtSuccess /\
-                world30 = world20 /\
-                mem_agree offset dst locmem mem30 /\ OpenArray.get mem30 dst = value20
-            | (world20, ExprAbort abort) => result30 = StmtAbort abort
-            end) e20):
+              CallOk30 
+            in let '(world20, result20) := L20.Expr.interpret_expr Ebound fc do_call_20 builtins
+                                                                   world locmap e CallOk20
+            in world30 = world20
+                /\
+               match result20 with
+               | ExprSuccess value20 =>
+                   result30 = StmtSuccess /\
+                   mem_agree offset dst locmem mem30 /\ OpenArray.get mem30 dst = value20
+               | ExprAbort abort => result30 = StmtAbort abort
+               end) e20):
    let _ := string_map_impl in
    let _ := memory_impl in
    let '(world30, mem30, result30) := L30.Stmt.interpret_stmt Ebound (translate_fun_ctx fc ok)
@@ -223,21 +226,21 @@ Lemma weak_interpret_translated_exprs {C: VyperConfig}
              | ExprAbort ab => (world', ExprAbort ab)
              end
          end eq_refl) world locmap e20 CallOk20
-   in match result20 with
+   in world30 = world20 
+       /\
+      match result20 with
       | ExprSuccess values20 => result30 = StmtSuccess
-                                /\
-                               world30 = world20
-                                /\
-                               mem_agree offset offset locmem mem30
-                                /\
-                               List.length values20 = List.length e20
-                                /\
-                               forall i: nat,
-                                 i < List.length e20
-                                  ->
-                                 List.nth_error values20 i
-                                  =
-                                 Some (OpenArray.get mem30 (offset + N.of_nat i)%N)
+                                 /\
+                                mem_agree offset offset locmem mem30
+                                 /\
+                                List.length values20 = List.length e20
+                                 /\
+                                forall i: nat,
+                                  i < List.length e20
+                                   ->
+                                  List.nth_error values20 i
+                                   =
+                                  Some (OpenArray.get mem30 (offset + N.of_nat i)%N)
       | ExprAbort abort => result30 = StmtAbort abort
       end.
 Proof.
@@ -290,7 +293,7 @@ destruct (Stmt.interpret_stmt Ebound (translate_fun_ctx fc ok) do_call_30 builti
       as ((world30, mem30), result30).
 destruct L20.Expr.interpret_expr as (world20, result20).
 destruct result20, result30; try easy.
-destruct H as (_, (H_world, (H_agree, H_value))).
+destruct H as (H_world, (H_result, (H_agree, H_value))).
 subst world20 value.
 
 (* head computation succeeded *)
@@ -355,11 +358,10 @@ destruct (interpret_expr_list world30 locmap e20
             (L20.Callset.callset_descend_tail eq_refl CallOk20))
   as (world20', result20').
 destruct result20', result30'; try easy.
-
 (* tail computation is finished *)
-destruct IH as (_, (IH_world, (IH_agree, (IH_len, IH_value)))).
+destruct IH as (IH_world, (IH_result, (IH_agree, (IH_len, IH_value)))).
+split. { assumption. }
 split. { trivial. }
-split. { exact IH_world. }
 clear translate_expr_list Heqtranslate_expr_list ExprOk TailOk Heqhead30 Heqtail30.
 split.
 {
@@ -454,10 +456,10 @@ Lemma interpret_translated_expr {C: VyperConfig}
                                                               world locmem s30 CallOk30
    in let '(world20, result20) := L20.Expr.interpret_expr Ebound fc do_call_20 builtins
                                                           world locmap e20 CallOk20
-   in match result20 with
+   in world30 = world20
+       /\
+      match result20 with
       | ExprSuccess value20 => result30 = StmtSuccess
-                                /\
-                               world30 = world20
                                 /\
                                mem_agree offset dst locmem mem30
                                 /\
@@ -538,11 +540,11 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   cbn in IH.
   destruct L30.Stmt.interpret_stmt as ((world30, mem30), result30).
   destruct L20.Expr.interpret_expr as (world20, result20).
-  destruct result20, result30; try destruct IH as (I_result, (I_world, (I_agree, I_dst))); 
+  destruct result20, result30; try destruct IH as (I_world, (I_result, (I_agree, I_dst)));
     try easy.
   (* both computations are successful *)
   subst value.
-  destruct interpret_unop. 2:{ trivial. }
+  destruct interpret_unop. 2:{ tauto. }
   split. { trivial. }
   split. { trivial. }
   split.
@@ -575,7 +577,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_1, mem30_1), result30_1).
   destruct L20.Expr.interpret_expr as (world20_1, result20_1).
   destruct result20_1, result30_1;
-    try destruct IH_1 as (I1_result, (I1_world, (I1_agree, I1_dst)));
+    try destruct IH_1 as (I1_world, (I1_result, (I1_agree, I1_dst)));
     try easy.
   (* both computations of the left operand are successful *)
   subst world20_1 value.
@@ -591,7 +593,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_2, mem30_2), result30_2).
   destruct L20.Expr.interpret_expr as (world20_2, result20_2).
   destruct result20_2, result30_2;
-    try destruct IH_2 as (I2_result, (I2_world, (I2_agree, I2_dst)));
+    try destruct IH_2 as (I2_world, (I2_result, (I2_agree, I2_dst)));
     try easy.
   (* both computations of the right operand are successful *)
   subst world20_2 value.
@@ -603,7 +605,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   }
   unfold m in *.
   rewrite A.
-  destruct interpret_binop. 2:{ trivial. }
+  destruct interpret_binop. 2:{ tauto. }
   split. { trivial. }
   split. { trivial. }
   split.
@@ -635,7 +637,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_1, mem30_1), result30_1).
   destruct L20.Expr.interpret_expr as (world20_1, result20_1).
   destruct result20_1, result30_1;
-    try destruct IH_1 as (I1_result, (I1_world, (I1_agree, I1_dst)));
+    try destruct IH_1 as (I1_world, (I1_result, (I1_agree, I1_dst)));
     try easy.
   (* cond computation succeeded *)
   subst value.
@@ -675,7 +677,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_2, mem30_2), result30_2).
   destruct L20.Expr.interpret_expr as (world20_2, result20_2).
   destruct result20_2, result30_2;
-    try destruct IH_2 as (I2_result, (I2_world, (I2_agree, I2_dst)));
+    try destruct IH_2 as (I2_world, (I2_result, (I2_agree, I2_dst)));
     try easy.
   (* else branch computation succeeded *)
   split. { trivial. }
@@ -698,7 +700,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_1, mem30_1), result30_1).
   destruct L20.Expr.interpret_expr as (world20_1, result20_1).
   destruct result20_1, result30_1;
-    try destruct IH_1 as (I1_result, (I1_world, (I1_agree, I1_dst)));
+    try destruct IH_1 as (I1_world, (I1_result, (I1_agree, I1_dst)));
     try easy.
   (* left operand computation succeeded *)
   subst value.
@@ -721,7 +723,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_2, mem30_2), result30_2).
   destruct L20.Expr.interpret_expr as (world20_2, result20_2).
   destruct result20_2, result30_2;
-    try destruct IH_2 as (I2_result, (I2_world, (I2_agree, I2_dst)));
+    try destruct IH_2 as (I2_world, (I2_result, (I2_agree, I2_dst)));
     try easy.
   (* right operand computation succeeded *)
   split. { trivial. }
@@ -744,7 +746,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_1, mem30_1), result30_1).
   destruct L20.Expr.interpret_expr as (world20_1, result20_1).
   destruct result20_1, result30_1;
-    try destruct IH_1 as (I1_result, (I1_world, (I1_agree, I1_dst)));
+    try destruct IH_1 as (I1_world, (I1_result, (I1_agree, I1_dst)));
     try easy.
   (* left operand computation succeeded *)
   subst value.
@@ -767,7 +769,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   destruct L30.Stmt.interpret_stmt as ((world30_2, mem30_2), result30_2).
   destruct L20.Expr.interpret_expr as (world20_2, result20_2).
   destruct result20_2, result30_2;
-    try destruct IH_2 as (I2_result, (I2_world, (I2_agree, I2_dst)));
+    try destruct IH_2 as (I2_world, (I2_result, (I2_agree, I2_dst)));
     try easy.
   (* right operand computation succeeded *)
   split. { trivial. }
@@ -817,7 +819,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
         end eq_refl) as interpret_expr_list.
   destruct interpret_expr_list as (world20_args, result20_args).
   destruct result20_args, result30_args; try easy.
-  destruct ArgsOk as (_, (Args_world, (Args_agree, (Args_len, Args_dst)))).
+  destruct ArgsOk as (Args_world, (Args_result, (Args_agree, (Args_len, Args_dst)))).
   (* args computation has succeeded *)
 
   assert (D: L30.Descend.fun_ctx_descend (translate_fun_ctx fc ok)
@@ -1103,7 +1105,7 @@ remember (fix
       end eq_refl) as interpret_expr_list.
 destruct interpret_expr_list as (world20_args, result20_args).
 destruct result20_args, result30_args; try easy.
-destruct ArgsOk as (_, (Args_world, (Args_agree, (Args_len, Args_dst)))).
+destruct ArgsOk as (Args_world, (Args_result, (Args_agree, (Args_len, Args_dst)))).
 
 assert (V: let _ := memory_impl in
            OpenArray.view mem30_args offset (N.of_nat (Datatypes.length args)) = value).
@@ -1140,22 +1142,22 @@ remember (fun Earity : (arity =? Datatypes.length (OpenArray.view mem30_args off
    end) as good_branch_30.
 assert (GoodBranch30Ok: let _ := memory_impl in
          forall Earity: (arity =? Datatypes.length (OpenArray.view mem30_args offset (N.of_nat (Datatypes.length args))) = true),
-           let '(world30, mem30, result30) := good_branch_30 Earity in
-           match
-             (if arity =? Datatypes.length value as arity_ok
-               return ((arity =? Datatypes.length value) = arity_ok -> world_state * expr_result uint256)
-              then
-               fun Earity : (arity =? Datatypes.length value) = true =>
-               call_builtin value Earity (builtin world20_args)
-              else
-               fun _ : (arity =? Datatypes.length value) = false =>
-               (world20_args, expr_error "builtin with wrong arity")) eq_refl
-           with
-           | (world20, ExprSuccess value20) =>
-               result30 = StmtSuccess /\
-               world30 = world20 /\ mem_agree offset dst locmem mem30 /\ OpenArray.get mem30 dst = value20
-           | (world20, ExprAbort abort) => result30 = StmtAbort abort
-           end).
+          let '(world30, mem30, result30) := good_branch_30 Earity in
+           let '(world20, result20) :=
+            (if arity =? Datatypes.length value as arity_ok
+              return ((arity =? Datatypes.length value) = arity_ok -> world_state * expr_result uint256)
+             then
+              fun Earity : (arity =? Datatypes.length value) = true =>
+              call_builtin value Earity (builtin world20_args)
+             else
+              fun _ : (arity =? Datatypes.length value) = false =>
+              (world20_args, expr_error "builtin with wrong arity")) eq_refl in
+            world30 = world20 /\
+            match result20 with
+            | ExprSuccess value20 =>
+                result30 = StmtSuccess /\ mem_agree offset dst locmem mem30 /\ OpenArray.get mem30 dst = value20
+            | ExprAbort abort => result30 = StmtAbort abort
+            end).
 {
   cbn. intro Earity. subst good_branch_30.
   subst world30_args.
