@@ -1,4 +1,4 @@
-From Coq Require Import NArith String.
+From Coq Require Import NArith ZArith String.
 
 From Vyper Require Import Config.
 From Vyper Require Import L10.Base.
@@ -135,7 +135,14 @@ Definition translate_small_stmt {C: VyperConfig}
    | L20.AST.Assign (L10.AST.AssignableLocalVar name) rhs =>
       match map_lookup varmap name with
       | None => inl "undefined local variable"
-      | Some n => translate_expr varmap n offset rhs
+      | Some n => (* translate_expr varmap n offset rhs *)
+          (* Compute the RHS into a temporary variable and then copy.
+             This is suboptimal but simplifies the proof. *)
+          match translate_expr varmap offset (N.succ offset) rhs with
+          | inl err => inl err
+          | inr result' =>
+              inr (L30.AST.Semicolon result' (L30.AST.SmallStmt (L30.AST.Copy n offset)))
+          end
       end
    | L20.AST.Assign (L10.AST.AssignableStorageVar name) rhs =>
       match translate_expr varmap offset (N.succ offset) rhs with
@@ -158,7 +165,7 @@ Fixpoint translate_stmt {C: VyperConfig}
       | Some _ => inl "local variable already exists"
       | None =>
           match translate_expr varmap offset (N.succ offset) init,
-                translate_stmt (map_insert varmap name offset) offset body
+                translate_stmt (map_insert varmap name offset) (N.succ offset) body
           with
           | inl err, _ | _, inl err => inl err
           | inr init', inr body' =>
@@ -179,13 +186,16 @@ Fixpoint translate_stmt {C: VyperConfig}
        match map_lookup varmap var with
        | Some _ => inl "local variable already exists"
        | None =>
-           match translate_expr varmap offset (N.succ offset) start,
-                 translate_stmt (map_insert varmap var offset) (N.succ offset) body
-           with
-           | inl err, _ | _, inl err => inl err
-           | inr start', inr body' =>
-             inr (L30.AST.Semicolon start' (L30.AST.Loop offset count body'))
-           end
+           if (Z_of_uint256 count =? 0)%Z
+             then inl "empty loop not allowed"
+             else
+               match translate_expr varmap offset (N.succ offset) start,
+                     translate_stmt (map_insert varmap var offset) (N.succ offset) body
+               with
+               | inl err, _ | _, inl err => inl err
+               | inr start', inr body' =>
+                 inr (L30.AST.Semicolon start' (L30.AST.Loop offset count body'))
+               end
        end
    | L20.AST.Semicolon a b =>
       match translate_stmt varmap offset a,

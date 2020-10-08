@@ -168,7 +168,7 @@ destruct ss; cbn in *; rr; inversion E; subst; clear E; cbn; rr; trivial.
   destruct lhs.
   { (* local *)
     destruct (map_lookup varmap name). 2:{ discriminate. }
-    remember (translate_expr varmap n offset rhs) as e'.
+    remember (translate_expr varmap _ _ rhs) as e'.
     destruct e'. { discriminate. }
     inversion H0. (* XXX *)
     cbn. rr. symmetry in Heqe'. subst.
@@ -207,7 +207,7 @@ revert s30 offset varmap E. induction s20; intros; cbn in *; rr.
   destruct (map_lookup varmap name). { discriminate. }
   remember (translate_expr varmap offset (N.succ offset) init) as init'.
   destruct init'. { discriminate. }
-  remember (translate_stmt (map_insert varmap name offset) offset s20) as s20'.
+  remember (translate_stmt (map_insert varmap name offset) _ s20) as s20'.
   destruct s20'. { discriminate. }
   symmetry in Heqs20'.
   inversion E; subst; clear E.
@@ -231,6 +231,7 @@ revert s30 offset varmap E. induction s20; intros; cbn in *; rr.
 }
 { (* loop *)
   destruct (map_lookup varmap var). { discriminate. }
+  destruct (Z_of_uint256 count =? 0)%Z. { discriminate. }
   remember (translate_expr varmap offset (N.succ offset) start) as start'.
   destruct start'. { discriminate. }
   remember (translate_stmt (map_insert varmap var offset) (N.succ offset) s20) as s20'.
