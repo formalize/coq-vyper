@@ -343,11 +343,11 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                        let last := (start_z + count_z - 1)%Z in
                        if (Z_of_uint256 (uint256_of_Z last) =? last)%Z
                          then
-                           let '(world', loc', result) :=
+                           let '(world'', loc', result) :=
                              interpret_loop_rec
                                world' loc start_z count_nat
-                           in (world', map_remove loc' var, result)
-                         else (world, loc, StmtAbort (AbortError "loop range overflows"))
+                           in (world'', map_remove loc' var, result)
+                         else (world', loc, StmtAbort (AbortError "loop range overflows"))
                    end
              end
   end eq_refl.

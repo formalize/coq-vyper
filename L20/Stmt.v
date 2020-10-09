@@ -199,12 +199,12 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                            let start_z := Z_of_uint256 start_value in
                            let last := (start_z + count_z - 1)%Z in
                            if (Z_of_uint256 (uint256_of_Z last) =? last)%Z
-                             then let '(world', loc', result') :=
+                             then let '(world'', loc', result') :=
                                          interpret_loop_rec
                                            world' loc start_z count_nat var
                                            (callset_descend_loop_body E CallOk)
-                                  in (world', map_remove loc' var, result')
-                             else (world, loc, StmtAbort (AbortError "loop range overflows"))
+                                  in (world'', map_remove loc' var, result')
+                             else (world', loc, StmtAbort (AbortError "loop range overflows"))
                    end
         end
     end eq_refl.
