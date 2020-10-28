@@ -51,6 +51,8 @@ From20To30/Translate.v
 From20To30/FunCtx.v
 From20To30/Callset.v
 From20To30/Expr.v
+From20To30/Stmt.v
+From20To30/Call.v
 
 MenhirLib/Version.v
 MenhirLib/Alphabet.v

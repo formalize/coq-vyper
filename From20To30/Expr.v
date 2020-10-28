@@ -527,7 +527,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   inversion ExprOk. subst s30. clear ExprOk.
   cbn.
   unfold L20.Expr.storage_var_is_declared.
-  assert (D := translate_fun_ctx_declmap fc ok name).
+  assert (D := translate_fun_ctx_declmap ok name).
   destruct (cd_declmap cd20 name) as [vardecl20 | ];
     destruct (cd_declmap cd30 name) as [vardecl30 | ]; try discriminate.
   2:easy.
@@ -999,7 +999,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
             CallOk20 CallOk30 Edecl1 Edecl2 d1 d2 args value DoCallOk
             do_call_20 do_call_30 Heqinterpret_expr_list Args_dst Args_len.
       revert some_branch_l some_branch_r SomeBranchOk.
-      rewrite (translate_fun_ctx_depthmap fc ok name).
+      rewrite (translate_fun_ctx_depthmap ok name).
       destruct (cd_depthmap cd20 name); intros. { apply SomeBranchOk. }
       rewrite (NoneOkL eq_refl).
       rewrite (NoneOkR eq_refl).
@@ -1029,7 +1029,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
       clear Heqsome_branch.
       remember (cd_declmap cd30 name) as maybe_d30.
       destruct maybe_d30. { apply SomeBranchOk. }
-      assert (T := translate_fun_ctx_declmap fc ok name).
+      assert (T := translate_fun_ctx_declmap ok name).
       rewrite<- Heqmaybe_d20 in T. rewrite<- Heqmaybe_d30 in T.
       discriminate.
     }
@@ -1040,7 +1040,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
                None).
     {
       intros.
-      assert (T := translate_fun_ctx_declmap fc ok name).
+      assert (T := translate_fun_ctx_declmap ok name).
       rewrite<- Heqmaybe_d20 in T. rewrite Edecl in T.
       discriminate.
     }

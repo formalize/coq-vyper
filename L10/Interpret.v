@@ -25,7 +25,7 @@ Fixpoint bind_args (names: list string) (values: list uint256)
                      | inl err => inl err
                      | inr bindings =>
                         match Map.lookup bindings hn with
-                        | Some _ => inl "error: duplicate variable name"
+                        | Some _ => inl "duplicate argument name"
                         | None => inr (Map.insert bindings hn hv)
                         end
                      end

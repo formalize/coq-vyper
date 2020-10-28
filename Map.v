@@ -390,6 +390,19 @@ Section MapFacts.
   apply empty_ok.
   Qed.
 
+  Lemma empty_items:
+    items empty = nil.
+  Proof.
+  assert (Ok := items_ok empty).
+  destruct (items empty) as [|kv]. { trivial. }
+  exfalso.
+  destruct kv as (k, v).
+  assert (OkK := Ok k).
+  rewrite empty_lookup in OkK.
+  cbn in OkK.
+  now destruct (KeyEqDec k k).
+  Qed.
+
   Definition of_alist (l: list (Key * Value))
   : M
   := fold_right (fun (p: Key * Value) m => let (k, v) := p in insert m k v) empty l.

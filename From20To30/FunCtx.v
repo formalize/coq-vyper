@@ -156,11 +156,10 @@ Definition translate_calldag {C: VyperConfig} (cd: L20.Descend.calldag)
 
 (***************************************************************************************************)
 
-Section FunCtx.
+Section FunCtx1.
   Context {C: VyperConfig}
           {bound: nat}
           {cd20: L20.Descend.calldag}
-          (fc: fun_ctx cd20 bound)
           {cd30: L30.Descend.calldag}
           (ok: translate_calldag cd20 = inr cd30).
 
@@ -251,13 +250,22 @@ Section FunCtx.
   destruct (map_maybe_map cd_decls translate_decl) as [|d30]. { discriminate. }
   apply (K d30 eq_refl ok).
   Qed.
+End FunCtx1.
+
+Section FunCtx2.
+  Context {C: VyperConfig}
+          {bound: nat}
+          {cd20: L20.Descend.calldag}
+          (fc: fun_ctx cd20 bound)
+          {cd30: L30.Descend.calldag}
+          (ok: translate_calldag cd20 = inr cd30).
 
   Local Lemma translate_fun_ctx_fun_decl_helper:
     cd_declmap cd30 (fun_name fc) <> None.
   Proof.
   intro E.
   assert (Ok := fun_decl_ok fc).
-  assert (M := translate_fun_ctx_declmap (fun_name fc)).
+  assert (M := translate_fun_ctx_declmap ok (fun_name fc)).
   rewrite Ok in M.
   rewrite E in M.
   discriminate.
@@ -290,11 +298,10 @@ Section FunCtx.
      {| fun_name := name
       ; fun_depth := fun_depth fc
       ; fun_depth_ok :=
-          eq_trans (translate_fun_ctx_depthmap name)
+          eq_trans (translate_fun_ctx_depthmap ok name)
                    (fun_depth_ok fc)
       ; fun_decl := cached_translated_decl
       ; fun_decl_ok := translate_fun_ctx_decl_ok
       ; fun_bound_ok := fun_bound_ok fc
      |}.
-
-End FunCtx.
+End FunCtx2.

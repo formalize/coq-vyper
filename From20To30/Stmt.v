@@ -222,7 +222,7 @@ destruct ss20; cbn in StmtOk.
   unfold L20.Stmt.do_assign.
   assert (A := Agree name).
   unfold L20.Expr.storage_var_is_declared.
-  assert (D := translate_fun_ctx_declmap fc ok name).
+  assert (D := translate_fun_ctx_declmap ok name).
   destruct T as (T_world, (T_mem, (T_result, T_dst))).
   destruct (cd_declmap cd20 name), (cd_declmap cd30 name); try easy.
   2:{

@@ -54,7 +54,10 @@ Fixpoint interpret_call {call_depth_bound: nat}
                                | StmtReturnFromFunction x => ExprSuccess x
                                | StmtAbort a => ExprAbort a
                                end)
-              else (world, expr_error "arity mismatch")
+              else (world, expr_error
+                      (if (List.length arg_values <? N.to_nat arity)%nat
+                         then "function called with too few arguments"
+                         else "function called with too many arguments"))
         | _ => fun _ => (world, expr_error "a declaration is found but it's not a function")
         end eq_refl
    end eq_refl.
