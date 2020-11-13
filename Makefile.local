@@ -1,0 +1,3 @@
+haskell/Lexer.hs: haskell/Lexer.x
+	alex --ghc haskell/Lexer.x
+all: haskell/Lexer.hs
