@@ -1,4 +1,4 @@
-From Coq Require Import String Arith.
+From Coq Require Import String Arith HexString.
 From Vyper Require Import Config L10.AST NaryFun.
 From Vyper Require UInt256.
 
@@ -9,6 +9,16 @@ Inductive abort {C: VyperConfig}
  | AbortContinue
  | AbortReturnFromContract
  | AbortRevert.
+
+Fixpoint string_of_abort {C: VyperConfig} (a: abort)
+:= (match a with
+    | AbortError err => "error(" ++ err ++ ")"
+    | AbortException n => "exception(" ++ HexString.of_Z (Z_of_uint256 n) ++ ")"
+    | AbortBreak => "break"
+    | AbortContinue => "continue"
+    | AbortReturnFromContract => "return_from_contract"
+    | AbortRevert => "revert"
+    end)%string.
 
 Inductive expr_result {C: VyperConfig} (type: Type)
 := ExprSuccess (value: type)

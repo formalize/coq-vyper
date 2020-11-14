@@ -94,4 +94,80 @@ Definition decl_name (d: decl)
    | StorageVarDecl name | FunDecl name _ _ => name
    end.
 
+(****************************   format   ******************************)
+
+Local Open Scope string_scope.
+
+Fixpoint string_of_expr (e: expr)
+:= match e with
+   | Const u => HexString.of_Z (Z_of_uint256 u)
+   | LocalVar name => name
+   | StorageVar name => "self." ++ name
+   | UnOp op a => "(" ++ L10.AST.string_of_unop op ++ string_of_expr a ++ ")"
+   | BinOp op a b => "(" ++ string_of_expr a ++ " " ++ L10.AST.string_of_binop op
+                         ++ " " ++ string_of_expr b ++ ")"
+   | IfThenElse cond yes no => "(" ++ string_of_expr yes ++ " if "
+                                   ++ string_of_expr cond ++ " else "
+                                   ++ string_of_expr no ++ ")"
+   | LogicalAnd a b => "(" ++ string_of_expr a ++ " and " ++ string_of_expr b ++ ")"
+   | LogicalOr  a b => "(" ++ string_of_expr a ++ " or "  ++ string_of_expr b ++ ")"
+   | PrivateCall name args => name ++ "(" ++
+       (let fix string_of_expr_list_with_preceding_commas {C: VyperConfig} (a: list expr)
+            := fold_right (fun e tail => ", " ++ string_of_expr e ++ tail) "" a
+        in match args with
+           | nil => ""
+           | h :: t => string_of_expr h ++
+                         string_of_expr_list_with_preceding_commas t
+           end) ++ ")"
+   | BuiltinCall name args => "builtin[" ++ name ++ "](" ++
+       (let fix string_of_expr_list_with_preceding_commas {C: VyperConfig} (a: list expr)
+            := fold_right (fun e tail => ", " ++ string_of_expr e ++ tail) "" a
+        in match args with
+           | nil => ""
+           | h :: t => string_of_expr h ++
+                         string_of_expr_list_with_preceding_commas t
+           end) ++ ")"
+   end.
+
+Definition string_of_small_stmt (ss: small_stmt)
+:= match ss with
+   | Pass => "pass"
+   | Abort a => "abort " ++ L10.Base.string_of_abort a
+   | Return e => "return " ++ string_of_expr e
+   | Raise e => "raise " ++ string_of_expr e
+   | Assign lhs rhs => L10.AST.string_of_assignable lhs ++ " = " ++ string_of_expr rhs
+   | ExprStmt e => string_of_expr e
+   end.
+
+Fixpoint lines_of_stmt (s: stmt)
+: list string
+:=  match s with
+    | SmallStmt ss => string_of_small_stmt ss :: nil
+    | LocalVarDecl name init scope => ("with " ++ name ++ " = " ++ string_of_expr init ++ ":")
+                                    :: L10.AST.add_indent (lines_of_stmt scope)
+    | IfElseStmt cond yes no => ("if " ++ string_of_expr cond ++ ":")
+                                :: L10.AST.add_indent (lines_of_stmt yes)
+                                ++ "else:" :: L10.AST.add_indent (lines_of_stmt no)
+    | Loop name start count body =>  ("for " ++ name ++ " in count("
+                                       ++ string_of_expr start ++ ", "
+                                       ++ HexString.of_Z (Z_of_uint256 count) ++ "):")
+                                       :: L10.AST.add_indent (lines_of_stmt body)
+    | Semicolon a b => lines_of_stmt a ++ lines_of_stmt b
+    end.
+
+Definition lines_of_decl (d: decl)
+:= match d with
+   | StorageVarDecl name => ("var " ++ name) :: nil
+   | FunDecl name args body =>
+       ("def " ++ name ++ "(" ++
+         match args with
+         | nil => ""
+         | h :: t => h ++ fold_right (fun x tail => ", " ++ x ++ tail) "" t
+         end ++ "):")
+       :: L10.AST.add_indent (lines_of_stmt body)
+   end.
+
+Definition string_of_decl (d: decl)
+:= L10.AST.newline ++ fold_right (fun x tail => x ++ L10.AST.newline ++ tail) "" (lines_of_decl d).
+
 End AST.

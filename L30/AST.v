@@ -1,4 +1,4 @@
-From Coq Require Import String NArith.
+From Coq Require Import String NArith DecimalString HexString.
 
 From Vyper Require Import Config FSet.
 From Vyper.L10 Require AST Base.
@@ -30,5 +30,73 @@ Inductive stmt
 Inductive decl
 := StorageVarDecl (name: string)
  | FunDecl (name: string) (args_count: N) (body: stmt).
+
+(****************************   format   ******************************)
+
+Local Open Scope string_scope.
+
+Definition string_of_small_stmt (ss: small_stmt)
+:= match ss with
+   | Pass => "pass"
+   | Const dst val => "[" ++ NilZero.string_of_uint (N.to_uint dst) ++ "]"
+                      ++ " <- "
+                      ++ HexString.of_Z (Z_of_uint256 val)
+   | Copy dst src => "[" ++ NilZero.string_of_uint (N.to_uint dst) ++ "]"
+                     ++ " <- ["
+                     ++ NilZero.string_of_uint (N.to_uint src)
+                     ++ "]"
+   | StorageGet dst name => "[" ++ NilZero.string_of_uint (N.to_uint dst)
+                            ++ "] <- storage_get " ++ name
+   | StoragePut name src => "storage_put " ++ name
+                            ++ " [" ++ NilZero.string_of_uint (N.to_uint src) ++ "]"
+   | UnOp op dst src => "[" ++ NilZero.string_of_uint (N.to_uint dst)
+                        ++ "] <- "
+                        ++ L10.AST.string_of_unop op
+                        ++ "[" ++ NilZero.string_of_uint (N.to_uint src) ++ "]"
+   | BinOp op dst src1 src2 => "[" ++ NilZero.string_of_uint (N.to_uint dst)
+                               ++ "] <- [" ++ NilZero.string_of_uint (N.to_uint src1) ++ "]"
+                               ++ L10.AST.string_of_binop op
+                               ++ "[" ++ NilZero.string_of_uint (N.to_uint src2) ++ "]"
+   | PrivateCall dst name args_offset args_count =>
+       "[" ++ NilZero.string_of_uint (N.to_uint dst)
+        ++ "] <- " ++ name ++ "/"
+        ++ NilZero.string_of_uint (N.to_uint args_count)
+        ++ "[" ++ NilZero.string_of_uint (N.to_uint args_offset) ++ "...]"
+   | BuiltinCall dst name args_offset args_count =>
+       "[" ++ NilZero.string_of_uint (N.to_uint dst)
+        ++ "] <- builtin " ++ name ++ "/"
+        ++ NilZero.string_of_uint (N.to_uint args_count)
+        ++ "[" ++ NilZero.string_of_uint (N.to_uint args_offset) ++ "...]"
+   | Abort a => "abort " ++ L10.Base.string_of_abort a
+   | Return n => "return [" ++ NilZero.string_of_uint (N.to_uint n) ++ "]"
+   | Raise n => "raise [" ++ NilZero.string_of_uint (N.to_uint n) ++ "]"
+   end.
+
+
+Fixpoint lines_of_stmt (s: stmt)
+: list string
+:=  match s with
+    | SmallStmt ss => string_of_small_stmt ss :: nil
+    | IfElseStmt cond yes no => ("if [" ++ NilZero.string_of_uint (N.to_uint cond) ++ "]:")
+                                :: L10.AST.add_indent (lines_of_stmt yes)
+                                ++ "else:" :: L10.AST.add_indent (lines_of_stmt no)
+    | Loop var count body =>  ("for [" ++ NilZero.string_of_uint (N.to_uint var) ++ "] in count("
+                                       ++ HexString.of_Z (Z_of_uint256 count) ++ "):")
+                                       :: L10.AST.add_indent (lines_of_stmt body)
+    | Semicolon a b => lines_of_stmt a ++ lines_of_stmt b
+    end.
+
+Definition lines_of_decl (d: decl)
+: list string
+:= (match d with
+    | StorageVarDecl name => ("var " ++ name)%string :: nil
+    | FunDecl name args body =>
+        ("def " ++ name ++ "/" ++ NilZero.string_of_uint (N.to_uint args) ++ ":")%string
+        :: L10.AST.add_indent (lines_of_stmt body)
+    end)%list.
+
+Definition string_of_decl (d: decl)
+:= L10.AST.newline
+   ++ List.fold_right (fun x tail => x ++ L10.AST.newline ++ tail) "" (lines_of_decl d).
 
 End AST.

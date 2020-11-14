@@ -6,6 +6,10 @@ Definition interpret_unop {C: VyperConfig} (op: unop) (a: uint256)
 := match op with
    | BitwiseNot => Some (uint256_of_Z (Z.lxor (Z.ones 256) (Z_of_uint256 a)))
    | Neg => maybe_uint256_of_Z (- Z_of_uint256 a) (* This only allows 0. *)
+   | LogicalNot => let az := Z_of_uint256 a in
+                   Some (if (az =? 0)%Z
+                          then one256
+                          else zero256)
    end.
 
 Definition interpret_binop {C: VyperConfig} (op: binop) (a b: uint256)
@@ -20,8 +24,9 @@ Definition interpret_binop {C: VyperConfig} (op: binop) (a b: uint256)
    | BitwiseOr  => Some (uint256_of_Z (Z.lor  (Z_of_uint256 a) (Z_of_uint256 b)))
    | BitwiseAnd => Some (uint256_of_Z (Z.land (Z_of_uint256 a) (Z_of_uint256 b)))
    | BitwiseXor => Some (uint256_of_Z (Z.lxor (Z_of_uint256 a) (Z_of_uint256 b)))
-   | ShiftLeft  => Some (uint256_of_Z (Z.shiftl (Z_of_uint256 a) (Z_of_uint256 b)))
-   | ShiftRight => Some (uint256_of_Z (Z.shiftr (Z_of_uint256 a) (Z_of_uint256 b)))
+   (* Nov 2020: changed shifts to checked as x << n is basically arithmetic, namely x * 2**n *)
+   | ShiftLeft  => maybe_uint256_of_Z (Z.shiftl (Z_of_uint256 a) (Z_of_uint256 b))
+   | ShiftRight => maybe_uint256_of_Z (Z.shiftr (Z_of_uint256 a) (Z_of_uint256 b))
    | Add => maybe_uint256_of_Z (Z_of_uint256 a + Z_of_uint256 b)%Z
    | Sub => maybe_uint256_of_Z (Z_of_uint256 a - Z_of_uint256 b)%Z
    | Mul => maybe_uint256_of_Z (Z_of_uint256 a * Z_of_uint256 b)%Z
