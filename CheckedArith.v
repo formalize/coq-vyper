@@ -303,4 +303,185 @@ enough (0 <= x mod y < y) by lia.
 apply Z.mod_pos_bound. lia.
 Qed.
 
-(* assert a <= (~1 >> b); a << b *)
+
+(** Unchecked left shift modulo [2^256]. *)
+Definition uint256_shl {C: VyperConfig} (a b: uint256)
+: uint256
+:= uint256_of_Z (Z.shiftl (Z_of_uint256 a) (Z_of_uint256 b)).
+
+(** Unchecked right shift modulo [2^256]. *)
+Definition uint256_shr {C: VyperConfig} (a b: uint256)
+: uint256
+:= uint256_of_Z (Z.shiftr (Z_of_uint256 a) (Z_of_uint256 b)).
+
+
+(** Checked [a << b] close to how it's compiled:
+     [assert (a << b) >> b = a;
+      a << b]. *)
+Definition uint256_checked_shl {C: VyperConfig} (a b: uint256)
+: option uint256
+:= let result := uint256_shl a b in
+   if Z_of_uint256 (uint256_shr result b) =? Z_of_uint256 a
+      then Some result
+      else None.
+
+Lemma Z_ones_nonneg (n: Z):
+  0 <= n -> 0 <= Z.ones n.
+Proof.
+intro L.
+rewrite Z.ones_equiv.
+rewrite<- Z.le_succ_le_pred.
+rewrite Z.le_succ_l.
+now apply Z.pow_pos_nonneg.
+Qed.
+
+
+(* TODO: move *)
+Lemma Z_shiftr_ones (a b: Z)
+                    (La: 0 <= a)
+                    (Lb: 0 <= b):
+  Z.shiftr (Z.ones a) b = Z.ones (Z.max 0 (a - b)).
+Proof.
+apply Z.bits_inj. intro k.
+assert (Lk := Z.neg_nonneg_cases k).
+case Lk; clear Lk; intro Lk. { now repeat rewrite Z.testbit_neg_r. }
+rewrite Z.shiftr_spec by exact Lk.
+repeat rewrite Z.testbit_ones_nonneg by lia.
+assert (D := Z.lt_ge_cases a b).
+case D; clear D; intro D.
+{ (* a < b *)
+  assert (L: a <= k + b) by lia.
+  apply Z.ltb_ge in L. rewrite L.
+  replace (Z.max 0 (a - b)) with 0 by lia.
+  apply Z.ltb_ge in Lk.
+  exact (eq_sym Lk).
+}
+(* a >= b *)
+replace (Z.max 0 (a - b)) with (a - b) by lia.
+remember (k + b <? a) as q. symmetry. symmetry in Heqq. destruct q.
+{ rewrite Z.ltb_lt in Heqq. rewrite Z.ltb_lt. lia. }
+rewrite Z.ltb_ge in Heqq. rewrite Z.ltb_ge. lia.
+Qed.
+
+
+Lemma uint256_checked_shl_ok {C: VyperConfig} (a: uint256) (b: uint256):
+  uint256_checked_shl a b = interpret_binop ShiftLeft a b.
+Proof.
+cbn. unfold uint256_checked_shl. unfold uint256_shl. unfold uint256_shr.
+assert (A := uint256_range a).
+assert (B := uint256_range b).
+remember (Z_of_uint256 a) as x.
+remember (Z_of_uint256 b) as y.
+assert (L: 0 <= Z.shiftl x y) by now apply Z.shiftl_nonneg.
+unfold maybe_uint256_of_Z.
+repeat rewrite uint256_ok.
+assert (D := Z.lt_ge_cases (Z.shiftl x y) (2 ^ 256)).
+case D; clear D; intro D.
+{ (* no overflow *)
+  replace ((Z.shiftl x y) mod 2 ^ 256) with (Z.shiftl x y).
+  2:{ symmetry. apply Z.mod_small. tauto. }
+  rewrite Z.shiftr_shiftl_l by tauto.
+  rewrite Z.sub_diag.
+  rewrite Z.shiftl_0_r.
+  rewrite Z.eqb_refl.
+  now rewrite (proj2 (Z.eqb_eq _ _) (Z.mod_small _ _ A)).
+}
+(* overflow *)
+enough (NE: Z.shiftr (Z.shiftl x y mod 2 ^ 256) y mod 2 ^ 256 <> x).
+{
+  apply Z.eqb_neq in NE. rewrite NE.
+  enough (M: Z.shiftl x y mod 2 ^ 256 <> Z.shiftl x y).
+  { apply Z.eqb_neq in M. now rewrite M. }
+  intro M. apply Z.mod_small_iff in M; lia.
+}
+intro E.
+repeat rewrite<- Z.land_ones in E by easy.
+rewrite Z.shiftr_land in E.
+rewrite Z.shiftr_shiftl_l in E by tauto.
+rewrite Z.sub_diag in E.
+rewrite Z.shiftl_0_r in E.
+rewrite<- Z.land_assoc in E.
+replace (Z.land (Z.shiftr (Z.ones 256) y) (Z.ones 256)) with (Z.shiftr (Z.ones 256) y) in E.
+2:{
+  symmetry. apply Z.land_ones_low. {apply Z.shiftr_nonneg. now apply Z_ones_nonneg. }
+  rewrite Z.log2_shiftr by easy.
+  replace (Z.log2 (Z.ones 256)) with 255 by trivial.
+  apply Z.max_lub_lt. { easy. }
+  lia.
+}
+rewrite Z_shiftr_ones in E by easy.
+assert (Y := Z.lt_ge_cases 256 y).
+case Y; clear Y; intro Y.
+{ (* big y *)
+  replace (Z.max 0 (256 - y)) with 0 in E by lia. cbn in E.
+  rewrite Z.land_0_r in E. rewrite<- E in *.
+  now rewrite Z.shiftl_0_l in D.
+}
+(* small y *)
+replace (Z.max 0 (256 - y)) with (256 - y) in E by lia.
+rewrite Z.land_ones in E.
+apply Z.mod_small_iff in E.
+2:{ apply Z.pow_nonzero. { discriminate. } lia. }
+2:lia.
+case E; clear E; intro E.
+{
+  rewrite Z.shiftl_mul_pow2 in D by tauto.
+  replace 256 with ((256 - y) + y) in D by lia.
+  rewrite Z.pow_add_r in D by lia.
+  apply Z.nlt_ge in D. apply D.
+  apply Z.mul_lt_mono_pos_r. { now apply Z.pow_pos_nonneg. }
+  tauto.
+}
+assert (X: x = 0) by lia.
+rewrite X in *.
+now rewrite Z.shiftl_0_l in D.
+Qed.
+
+
+(** There is an extra range check in [interpret_binop ShiftRight] but it will never be triggered. *)
+Lemma uint256_shr_ok {C: VyperConfig} (a: uint256) (b: uint256):
+  Some (uint256_shr a b) = interpret_binop ShiftRight a b.
+Proof.
+cbn. unfold uint256_shr. unfold maybe_uint256_of_Z.
+rewrite uint256_ok.
+assert (A := uint256_range a).
+assert (B := uint256_range b).
+remember (Z_of_uint256 a) as x.
+remember (Z_of_uint256 b) as y.
+replace (Z.shiftr x y mod 2 ^ 256 =? Z.shiftr x y) with true. { trivial. }
+symmetry. rewrite Z.eqb_eq.
+apply Z.mod_small.
+rewrite Z.shiftr_div_pow2 by tauto.
+split.
+{
+  apply Z.div_pos. { tauto. }
+  now apply Z.pow_pos_nonneg.
+}
+apply (Z.le_lt_trans _ x _). 2:tauto.
+apply Z_div_le_l. { tauto. }
+now apply Z.pow_nonneg.
+Qed.
+
+
+(** Checked [-a] close to how it's compiled: [assert a == 0; 0] *)
+Definition uint256_checked_neg {C: VyperConfig} (a: uint256)
+: option uint256
+:= if Z_of_uint256 a =? 0
+     then Some zero256
+     else None.
+
+Lemma uint256_checked_neg_ok {C: VyperConfig} (a: uint256):
+  uint256_checked_neg a = interpret_unop Neg a.
+Proof.
+cbn. unfold uint256_checked_neg.
+assert (A := uint256_range a).
+remember (Z_of_uint256 a) as x.
+unfold maybe_uint256_of_Z.
+rewrite uint256_ok.
+remember (x =? 0) as x_zero. symmetry in Heqx_zero. destruct x_zero.
+{ rewrite Z.eqb_eq in Heqx_zero. now rewrite Heqx_zero. }
+rewrite Z.eqb_neq in Heqx_zero.
+replace (- x mod 2 ^ 256 =? - x) with false. { trivial. }
+symmetry. rewrite Z.eqb_neq.
+intro H. apply Z.mod_small_iff in H; lia.
+Qed.
