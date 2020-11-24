@@ -792,6 +792,16 @@ assert (Hx := H x). clear H.
 destruct (has a x); destruct (has b x); destruct (has c x); tauto.
 Qed.
 
+Lemma union_monotonic (a b c d: S)
+                      (AB: is_subset a b = true)
+                      (CD: is_subset c d = true):
+  is_subset (union a c) (union b d) = true.
+Proof.
+assert (Q: is_subset (union a c) (union a d) = true) by now apply union_monotonic_r.
+apply (is_subset_trans Q).
+now apply union_monotonic_l.
+Qed.
+
 Lemma inter_monotonic_l (a b c: S)
                         (H: is_subset a b = true):
   is_subset (inter a c) (inter b c) = true.
@@ -810,6 +820,16 @@ rewrite is_subset_ok in *. intro x.
 repeat rewrite inter_ok.
 assert (Hx := H x). clear H.
 destruct (has a x); destruct (has b x); destruct (has c x); tauto.
+Qed.
+
+Lemma inter_monotonic (a b c d: S)
+                      (AB: is_subset a b = true)
+                      (CD: is_subset c d = true):
+  is_subset (inter a c) (inter b d) = true.
+Proof.
+assert (Q: is_subset (inter a c) (inter a d) = true) by now apply inter_monotonic_r.
+apply (is_subset_trans Q).
+now apply inter_monotonic_l.
 Qed.
 
 End SetFacts.
