@@ -641,8 +641,8 @@ assert (Agree': VarsAgree varmap (map_remove locmap var) mem30).
 }
 
 clear Start_mem. (* we don't have a way to carry that through induction; Agree' is what we have instead *)
-clear Agree Q Heqcursor Heqno_overflow.
-revert count Heqcount_is_0 locmap world20 mem30 cursor Agree' WeakMainLoopEq
+clear Agree Q Heqcursor Heqno_overflow Heqcount_is_0.
+revert count locmap world20 mem30 cursor Agree' WeakMainLoopEq
        CallOk30 CallOk20 Heqcountdown.
 induction countdown; intros. (* ----------- induction -------------*)
 { repeat (split; trivial). }
@@ -765,16 +765,7 @@ assert (NextLoopEq: cap = (Z.succ cursor + Z_of_uint256 count' - 1)%Z).
 assert (WeakNextLoopEq: (cap = Z.succ cursor + Z_of_uint256 count' - 1 \/ Z_of_uint256 count' = 0)%Z).
 { left. apply NextLoopEq. }
 
-destruct countdown.
-{ destruct result20'; try destruct a; split; try easy; split; easy. } (* no iterations left *)
-
-assert (MoreIterations: false = (Z_of_uint256 count' =? 0)%Z).
-{
-  symmetry. rewrite Z.eqb_neq. intro E.
-  rewrite E in CountOk. discriminate.
-}
-
-assert (IH := IHcountdown count' MoreIterations mem20' world20' mem30' (Z.succ cursor)
+assert (IH := IHcountdown count' mem20' world20' mem30' (Z.succ cursor)
                           PostBodyAgree WeakNextLoopEq CallOk30 CallOk20 CountOk).
 
 assert (FixCall30:

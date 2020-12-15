@@ -43,6 +43,8 @@ From10To20/Expr.v
 From10To20/Stmt.v
 From10To20/Call.v
 
+ConstFold.v
+
 L30/AST.v
 L30/Callset.v
 L30/Descend.v

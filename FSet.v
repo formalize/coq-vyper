@@ -649,6 +649,14 @@ assert (Ok := proj1 (is_subset_ok a b) AB x).
 rewrite H in Ok. apply Ok.
 Qed.
 
+Lemma empty_subset {a: S}:
+  is_subset empty a = true.
+Proof.
+rewrite is_subset_ok.
+intro x.
+now rewrite empty_ok.
+Qed.
+
 Lemma add_subset (x: M) (s: S):
   is_subset s (add s x) = true.
 Proof.
