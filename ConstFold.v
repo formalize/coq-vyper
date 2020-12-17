@@ -1383,7 +1383,7 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
                 (@eq_refl (@small_stmt C) (@Return C e)) CallOk'
               =
              @callset_descend_return C (@Return C e) e
-                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) cd'
+                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) false cd'
                                 bigger_call_depth_bound
                                (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
                  (@eq_refl (@small_stmt C) (@Return C e)) CallOk').
@@ -1404,7 +1404,7 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
                 (@eq_refl (@small_stmt C) (@Raise C e)) CallOk'
               =
              @callset_descend_raise C (@Raise C e) e
-                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) cd'
+                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) false cd'
                                 bigger_call_depth_bound
                                (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
                  (@eq_refl (@small_stmt C) (@Raise C e)) CallOk').
@@ -1425,7 +1425,7 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
                 (@eq_refl (@small_stmt C) (@Assign C lhs e)) CallOk'
               =
              @callset_descend_assign_rhs C (@Assign C lhs e) lhs e
-                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) cd'
+                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) false cd'
                                 bigger_call_depth_bound
                                (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
                  (@eq_refl (@small_stmt C) (@Assign C lhs e)) CallOk').
@@ -1461,7 +1461,7 @@ assert (R: @callset_descend_expr_stmt C (@ExprStmt C e') e'
             =
            @callset_descend_expr_stmt C (@ExprStmt C e') e'
             (@decl_callset C
-               (@fun_decl C (@decl C) (@decl_callset C) cd' bigger_call_depth_bound
+               (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
                   (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
             (@eq_refl (@small_stmt C) (@ExprStmt C e')) CallOk').
 { easy. }
@@ -1539,7 +1539,7 @@ induction s; intros; cbn in StmtOk; unfold sum_map in *; unfold sum_ap in *.
               =
              (@callset_descend_var_scope C (@LocalVarDecl C name init' body) name init' body
                (@decl_callset C
-                 (@fun_decl C (@decl C) (@decl_callset C) cd' bigger_call_depth_bound
+                 (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
                  (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
                (@eq_refl (@stmt C) (@LocalVarDecl C name init' body)) CallOk')).
   { easy. }
@@ -1689,12 +1689,12 @@ assert (FixCallL:
 assert (FixCallR:
    (@callset_descend_loop_body C (@Loop C var start count' body) body var start count'
     (@decl_callset C
-       (@fun_decl C (@decl C) (@decl_callset C) cd bigger_call_depth_bound fc))
+       (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
     (@eq_refl (@stmt C) (@Loop C var start count' body)) CallOk)
   =
  (@callset_descend_loop_body C (@Loop C var start count body) body var start count
    (@decl_callset C
-      (@fun_decl C (@decl C) (@decl_callset C) cd bigger_call_depth_bound fc))
+      (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
    (@eq_refl (@stmt C) (@Loop C var start count body)) CallOk))
   by apply PropExtensionality.proof_irrelevance.
 rewrite FixCallL in IH. rewrite FixCallR in IH. clear FixCallL FixCallR.

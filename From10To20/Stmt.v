@@ -768,13 +768,13 @@ induction s10 using L10.AST.stmt_ind'; intros.
                 (@AST.Loop C var
                    (@translate_expr C
                       (fun name : string =>
-                       match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd name with
+                       match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd name with
                        | Some _ => true
                        | None => false
                        end) start) count (translate_stmt_list' body)) (translate_stmt_list' body) var
                 (@translate_expr C
                    (fun name : string =>
-                    match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd name with
+                    match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd name with
                     | Some _ => true
                     | None => false
                     end) start) count
@@ -785,7 +785,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
                    (@AST.Loop C var
                       (@translate_expr C
                          (fun name : string =>
-                          match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd name with
+                          match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd name with
                           | Some _ => true
                           | None => false
                           end) start) count (translate_stmt_list' body))) CallOk20)
@@ -884,7 +884,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
                  (@translate_expr C
                     (fun name : string =>
                      match
-                       @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd name
+                       @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd name
                      with
                      | Some _ => true
                      | None => false
@@ -892,7 +892,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
               var
               (@translate_expr C
                  (fun name : string =>
-                  match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd name with
+                  match @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd name with
                   | Some _ => true
                   | None => false
                   end) start) count'
@@ -905,7 +905,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
                     (@translate_expr C
                        (fun name : string =>
                         match
-                          @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd name
+                          @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd name
                         with
                         | Some _ => true
                         | None => false
@@ -916,7 +916,7 @@ induction s10 using L10.AST.stmt_ind'; intros.
   assert (FixCount10: @L10.Callset.callset_descend_fixed_count_loop_body C
                        (@AST.FixedCountLoop C var start count' body) body var start count'
                        (@L10.Callset.decl_callset C
-                          (@fun_decl C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd
+                          (@fun_decl C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd
                              (S smaller_call_depth_bound) fc))
                        (@eq_refl (@L10.AST.stmt C) (@AST.FixedCountLoop C var start count' body))
                        CallOk10

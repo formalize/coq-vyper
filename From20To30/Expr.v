@@ -282,7 +282,7 @@ assert (H := HeadOk (L20.Callset.callset_descend_head eq_refl CallOk20)
 clear HeadOk.
 assert (R: (@Callset.callset_descend_semicolon_left C s tail30 (@AST.Semicolon C s tail30)
           (@Callset.decl_callset C
-             (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) cd30 bigger_call_depth_bound
+             (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) false cd30 bigger_call_depth_bound
                 (@translate_fun_ctx C bigger_call_depth_bound cd20 fc cd30 ok)))
              (@eq_refl (@AST.stmt C) (@AST.Semicolon C s tail30)) CallOk30)
              =
@@ -311,7 +311,7 @@ subst world20 value.
 assert (R:
         (@Callset.callset_descend_semicolon_right C s tail30 (@AST.Semicolon C s tail30)
            (@Callset.decl_callset C
-              (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) cd30 bigger_call_depth_bound
+              (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) false cd30 bigger_call_depth_bound
                  (@translate_fun_ctx C bigger_call_depth_bound cd20 fc cd30 ok)))
            (@eq_refl (@AST.stmt C) (@AST.Semicolon C s tail30)) CallOk30)
          =
@@ -1052,7 +1052,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
             (@AST.PrivateCall C dst name offset (N.of_nat (@Datatypes.length (@AST.expr C) args))))
          (@AST.PrivateCall C dst name offset (N.of_nat (@Datatypes.length (@AST.expr C) args)))
          (@Callset.decl_callset C
-            (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) cd30 bigger_call_depth_bound
+            (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) false cd30 bigger_call_depth_bound
                (@translate_fun_ctx C bigger_call_depth_bound cd20 fc cd30 ok)))
          (@eq_refl (@AST.stmt C)
             (@AST.SmallStmt C
@@ -1065,7 +1065,7 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
                   (@AST.PrivateCall C dst name offset
                      (N.of_nat (@Datatypes.length (@AST.expr C) args)))))
             (@Callset.decl_callset C
-               (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) cd30 bigger_call_depth_bound
+               (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) false cd30 bigger_call_depth_bound
                   (@translate_fun_ctx C bigger_call_depth_bound cd20 fc cd30 ok)))
             (@eq_refl (@AST.stmt C)
                (@AST.Semicolon C s0
@@ -1298,7 +1298,7 @@ assert (GoodBranch30Ok: let _ := memory_impl in
   assert (Earity = Earity'). { apply PropExtensionality.proof_irrelevance. }
   subst Earity'.
   destruct (call_builtin value Earity (builtin world20_args)).
-  destruct e. 
+  destruct e.
   2:{
     split. { trivial. }
     split. 2: { trivial. }

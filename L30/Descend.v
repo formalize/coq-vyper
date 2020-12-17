@@ -6,7 +6,7 @@ From Vyper.L30 Require Import AST Callset.
 Section Descend.
 Context {C: VyperConfig}.
 
-Definition calldag := generic_calldag decl decl_callset.
+Definition calldag := generic_calldag decl_callset false.
 
 (* Unfortunately this is a huge duplication of L10/Descend.v due to the fact that L10 has this:
      [E: e = PrivateOrBuiltinCall name args]

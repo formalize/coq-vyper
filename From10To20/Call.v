@@ -180,22 +180,22 @@ assert (SomeBranchOk: forall d Ed' Ed,
   (* This is even more messed up than usual because just the implicit arguments weren't enough. *)
   remember (fun depth
          (Edepth : @eq (option nat)
-                    (@cd_depthmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd fun_name)
+                    (@cd_depthmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd fun_name)
                     (@Some nat depth)) =>
        @Some
          (@sigT nat
             (fun bound : nat =>
-             @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) (@translate_calldag C cd) bound))
+             @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) false (@translate_calldag C cd) bound))
          (@existT nat
             (fun bound : nat =>
-             @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) (@translate_calldag C cd) bound)
+             @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) false (@translate_calldag C cd) bound)
             (S depth)
-            (Build_fun_ctx C (@AST.decl C) (@Callset.decl_callset C) (@translate_calldag C cd)
+            (Build_fun_ctx C (@AST.decl C) (@Callset.decl_callset C) false (@translate_calldag C cd)
                (S depth) fun_name depth Edepth
                (@translate_decl C
                   (fun name : string =>
                    match
-                     @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd name return bool
+                     @cd_declmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd name return bool
                    with
                    | Some _ => true
                    | None => false
@@ -206,15 +206,15 @@ assert (SomeBranchOk: forall d Ed' Ed,
     as depth_lhs_some_branch.
   remember (fun (depth: nat)
           (Edepth : @eq (option nat)
-                     (@cd_depthmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd fun_name)
+                     (@cd_depthmap C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd fun_name)
                      (@Some nat depth)) =>
         @Some
           (@sigT nat
-             (fun bound : nat => @fun_ctx C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd bound))
+             (fun bound : nat => @fun_ctx C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd bound))
           (@existT nat
-             (fun bound : nat => @fun_ctx C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd bound)
+             (fun bound : nat => @fun_ctx C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd bound)
              (S depth)
-             (Build_fun_ctx C (@L10.AST.decl C) (@L10.Callset.decl_callset C) cd 
+             (Build_fun_ctx C (@L10.AST.decl C) (@L10.Callset.decl_callset C) true cd
                 (S depth) fun_name depth Edepth d Ed
                 (@proj2 (forall _ : @eq bool (Nat.leb depth depth) true, lt depth (S depth))
                    (forall _ : lt depth (S depth), @eq bool (Nat.leb depth depth) true)

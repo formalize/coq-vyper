@@ -784,12 +784,12 @@ subst. cbn. intros.
 (* This is even more messed up than usual because just the implicit arguments weren't enough. *)
 remember (fun depth
        (Edepth : @eq (option nat)
-                    (@cd_depthmap C (@AST.decl C) (@Callset.decl_callset C) cd30 fun_name)
+                    (@cd_depthmap C (@AST.decl C) (@Callset.decl_callset C) false cd30 fun_name)
                     (@Some nat depth)) =>
        @Some
-         (@sigT nat (fun bound : nat => @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) cd30 bound))
+         (@sigT nat (fun bound : nat => @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) false cd30 bound))
          (@existT nat
-            (fun bound : nat => @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) cd30 bound)
+            (fun bound : nat => @fun_ctx C (@AST.decl C) (@Callset.decl_callset C) false cd30 bound)
             (S depth)
             _))
   as depth_lhs_some_branch.

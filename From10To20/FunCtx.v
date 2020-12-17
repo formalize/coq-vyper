@@ -42,12 +42,16 @@ rewrite FSet.for_all_ok in *. intros x H.
 rewrite callset_translate_decl in H.
 apply Bool.andb_true_iff in H.
 assert (Q := D x (proj1 H)). clear D.
+destruct H as (Has, IsPrivate).
+unfold is_private_call in IsPrivate.
+unfold cd_declmap in IsPrivate.
+assert (X := cd_depthmap_ok cd x).
+destruct (Map.lookup (cd_decls cd) x) as [xdecl|]. 2:easy.
 destruct (cd_depthmap cd x). 2:easy.
 destruct n; rewrite Nat.ltb_lt in Q. { now apply Nat.nlt_0_r in Q. }
 rewrite Nat.leb_le.
 apply Nat.lt_succ_r. exact Q.
 Qed.
-
 
 Definition translate_calldag {C: VyperConfig} (cd: L10.Descend.calldag)
 : L20.Descend.calldag

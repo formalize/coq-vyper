@@ -418,7 +418,7 @@ induction s20; intros.
   assert (R:
         (@Callset.callset_descend_semicolon_right C s s0 (@AST.Semicolon C s s0)
            (@Callset.decl_callset C
-              (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) cd30 bigger_call_depth_bound
+              (@fun_decl C (@AST.decl C) (@Callset.decl_callset C) false cd30 bigger_call_depth_bound
                  (@translate_fun_ctx C bigger_call_depth_bound cd20 fc cd30 ok)))
            (@eq_refl (@AST.stmt C) (@AST.Semicolon C s s0)) CallOk30)
          =
@@ -796,14 +796,14 @@ assert (FixCall20:
           (@L20.Callset.callset_descend_loop_body C (@L20.AST.Loop C var start count' s20) s20
              var start count'
              (@L20.Callset.decl_callset C
-                (@fun_decl C (@L20.AST.decl C) (@L20.Callset.decl_callset C) cd20
+                (@fun_decl C (@L20.AST.decl C) (@L20.Callset.decl_callset C) false cd20
                    bigger_call_depth_bound fc))
              (@eq_refl (@L20.AST.stmt C) (@L20.AST.Loop C var start count' s20)) CallOk20)
             =
           (@L20.Callset.callset_descend_loop_body C (@L20.AST.Loop C var start count s20) s20
                 var start count
                 (@L20.Callset.decl_callset C
-                   (@fun_decl C (@L20.AST.decl C) (@L20.Callset.decl_callset C) cd20
+                   (@fun_decl C (@L20.AST.decl C) (@L20.Callset.decl_callset C) false cd20
                       bigger_call_depth_bound fc))
                 (@eq_refl (@L20.AST.stmt C) (@L20.AST.Loop C var start count s20)) CallOk20)).
 { apply PropExtensionality.proof_irrelevance. }

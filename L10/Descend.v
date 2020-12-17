@@ -9,7 +9,7 @@ Local Open Scope string_scope.
 Section Descend.
 Context {C: VyperConfig}.
 
-Definition calldag := generic_calldag decl decl_callset.
+Definition calldag := generic_calldag decl_callset true.
 
 
 Lemma call_descend {call_depth_bound new_call_depth_bound current_fun_depth: nat}
