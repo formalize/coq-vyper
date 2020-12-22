@@ -26,7 +26,7 @@ Fixpoint const_fold_expr {C: VyperConfig} (e: expr)
       | inr (Const x) =>
           match interpret_unop op x with
           | Some val => inr (Const val)
-          | None => inl ("arithmetic error in unary " ++ L10.AST.string_of_unop op)%string
+          | None => inl ("arithmetic error in unary " ++ L10.ToString.string_of_unop op)%string
           end
       | inr x => inr (UnOp op x)
       end
@@ -38,7 +38,7 @@ Fixpoint const_fold_expr {C: VyperConfig} (e: expr)
       | inr (Const x), inr (Const y) =>
           match interpret_binop op x y with
           | Some val => inr (Const val)
-          | None => inl ("arithmetic error in binary" ++ L10.AST.string_of_binop op)%string
+          | None => inl ("arithmetic error in binary" ++ L10.ToString.string_of_binop op)%string
           end
       | inr x, inr y => inr (BinOp op x y)
       end
@@ -393,216 +393,15 @@ cbn in ok. inversion ok. subst d'. cbn.
 now apply callset_const_fold_stmt.
 Qed.
 
-Local Lemma const_fold_calldag_depthmap_ok {C: VyperConfig}
-                                           (name: string)
-                                           (cd: calldag)
-                                           (d: string_map decl):
-   let _ := string_map_impl in
-   forall E: map_maybe_map (cd_decls cd) const_fold_decl = inr d,
-     match Map.lookup d name with
-     | Some decl =>
-         match cd_depthmap cd name with
-         | Some x =>
-             let _ := string_set_impl in
-             FSet.for_all (Callset.decl_callset decl)
-               (fun callee : string =>
-                match cd_depthmap cd callee with
-                | Some y => y <? x
-                | None => false
-                end) = true
-         | None => False
-         end
-     | None => True
-     end.
-Proof.
-intros.
-remember (Map.lookup d name) as m.
-destruct m. 2:trivial.
-assert (D := cd_depthmap_ok cd name).
-assert (F := map_maybe_map_ok E name).
-destruct (Map.lookup (cd_decls cd) name). 2:{ now rewrite F in Heqm. }
-destruct (cd_depthmap cd name). 2:assumption.
-rewrite FSet.for_all_ok. rewrite FSet.for_all_ok in D.
-intros x H.
-remember (const_fold_decl d1) as d30.
-destruct d30. { contradiction. }
-rewrite<- Heqm in F. inversion F; subst.
-assert (Q := callset_const_fold_decl (eq_sym Heqd30)).
-cbn in Q. rewrite FSet.is_subset_ok in Q.
-assert (Qx := Q x).
-rewrite H in Qx. cbn in Qx.
-apply (D x Qx).
-Qed.
-
-(* All this should be way simpler as it's practically identical to From20To30.FunCtx. *)
 Definition const_fold_calldag {C: VyperConfig} (cd: calldag)
-: string + calldag
-:= let _ := string_map_impl in
-   match map_maybe_map (cd_decls cd) const_fold_decl as cd' return _ = cd' -> _ with
-   | inl err => fun _ => inl err
-   | inr d => fun E => inr
-     {| cd_decls := d
-      ; cd_depthmap := cd_depthmap cd
-      ; cd_depthmap_ok name := const_fold_calldag_depthmap_ok name cd d E
-     |}
-   end eq_refl.
+:= calldag_maybe_map const_fold_decl (@callset_const_fold_decl C) cd.
 
-
-(*************************************************************************************)
-(* fun ctx *)
-
-Section FunCtx1.
-  Context {C: VyperConfig}
+Definition const_fold_fun_ctx {C: VyperConfig}
           {bound: nat}
           {cd cd': calldag}
-          (ok: const_fold_calldag cd = inr cd').
-
-  Lemma const_fold_fun_ctx_depthmap (name: string):
-    cd_depthmap cd name
-     =
-    cd_depthmap cd' name.
-  Proof.
-  destruct cd.
-  unfold const_fold_calldag in ok.
-  cbn in *.
-  remember (fun d (E : map_maybe_map cd_decls const_fold_decl = inr d) =>
-         inr
-           {|
-           cd_decls := d;
-           cd_depthmap := cd_depthmap;
-           cd_depthmap_ok := fun name : string =>
-                             const_fold_calldag_depthmap_ok name
-                               {|
-                               cd_decls := cd_decls;
-                               cd_depthmap := cd_depthmap;
-                               cd_depthmap_ok := cd_depthmap_ok |} d E |}) as good_branch.
-  assert (K: forall (d': string_map decl)
-                    (E: map_maybe_map cd_decls const_fold_decl = inr d'),
-               good_branch d' E = inr cd'
-                ->
-               Calldag.cd_depthmap cd' name = cd_depthmap name).
-  {
-    intros. subst.
-    inversion H. now subst.
-  }
-  clear Heqgood_branch.
-  destruct (map_maybe_map cd_decls const_fold_decl) as [|d']. { discriminate. }
-  symmetry.
-  apply (K d' eq_refl ok).
-  Qed.
-
-  Lemma const_fold_fun_ctx_declmap (name: string):
-    match cd_declmap cd name with
-    | Some d => Some (const_fold_decl d)
-    | None => None
-    end
-     =
-    match cd_declmap cd' name with
-    | Some d => Some (inr d)
-    | None => None
-    end.
-  Proof.
-  destruct cd.
-  unfold const_fold_calldag in ok.
-  cbn in *.
-  remember (fun d (E : map_maybe_map cd_decls const_fold_decl = inr d) =>
-         inr
-           {|
-           cd_decls := d;
-           cd_depthmap := cd_depthmap;
-           cd_depthmap_ok := fun name : string =>
-                             const_fold_calldag_depthmap_ok name
-                               {|
-                               cd_decls := cd_decls;
-                               cd_depthmap := cd_depthmap;
-                               cd_depthmap_ok := cd_depthmap_ok |} d E |}) as good_branch.
-  unfold cd_declmap. cbn.
-  assert (K: forall (d': string_map decl)
-                    (E: map_maybe_map cd_decls const_fold_decl = inr d'),
-               good_branch d' E = inr cd'
-                ->
-               let _ := string_map_impl in
-               match Map.lookup cd_decls name with
-               | Some d => Some (const_fold_decl d)
-               | None => None
-               end = match Map.lookup (Calldag.cd_decls cd') name with
-                     | Some d => Some (inr d)
-                     | None => None
-                     end).
-  {
-    intros. subst.
-    inversion H. subst.
-    cbn.
-    clear H ok.
-    assert (M := map_maybe_map_ok E name).
-    destruct (Map.lookup cd_decls name). 2:{ now destruct Map.lookup. }
-    destruct (const_fold_decl d). { contradiction. }
-    (* why rewrite M doesn't work? *)
-    destruct Map.lookup. { now inversion M. }
-    discriminate.
-  }
-  clear Heqgood_branch.
-  destruct (map_maybe_map cd_decls const_fold_decl) as [|d']. { discriminate. }
-  apply (K d' eq_refl ok).
-  Qed.
-End FunCtx1.
-
-Section FunCtx2.
-  Context {C: VyperConfig}
-          {bound: nat}
-          {cd cd': calldag}
-          (ok: const_fold_calldag cd = inr cd')
-          (fc: fun_ctx cd bound).
-
-  Local Lemma translate_fun_ctx_fun_decl_helper:
-    cd_declmap cd' (fun_name fc) <> None.
-  Proof.
-  intro E.
-  assert (Ok := fun_decl_ok fc).
-  assert (M := const_fold_fun_ctx_declmap ok (fun_name fc)).
-  rewrite Ok in M.
-  rewrite E in M.
-  discriminate.
-  Qed.
-
-  Definition cached_const_folded_decl
-  := match cd_declmap cd' (fun_name fc)
-     as d' return _ = d' -> _
-     with
-     | Some f => fun _ => f
-     | None => fun E =>
-          False_rect _ (translate_fun_ctx_fun_decl_helper E)
-     end eq_refl.
-
-  Local Lemma const_fold_fun_ctx_decl_ok:
-    cd_declmap cd' (fun_name fc)
-     =
-    Some cached_const_folded_decl.
-  Proof.
-  assert (D := fun_decl_ok fc).
-  unfold cached_const_folded_decl.
-  remember translate_fun_ctx_fun_decl_helper as foo. clear Heqfoo. revert foo.
-  destruct (cd_declmap cd' (fun_name fc)). { trivial. }
-  intro. contradiction.
-  Qed.
-
-  Local Lemma const_fold_fun_ctx_depth_ok:
-    cd_depthmap cd' (fun_name fc) = Some (fun_depth fc).
-  Proof.
-  rewrite<- (const_fold_fun_ctx_depthmap ok).
-  apply (fun_depth_ok fc).
-  Qed.
-
-  Definition const_fold_fun_ctx
-  : fun_ctx cd' bound
-  := {| fun_name := fun_name fc
-      ; fun_depth := fun_depth fc
-      ; fun_depth_ok := const_fold_fun_ctx_depth_ok
-      ; fun_decl := cached_const_folded_decl
-      ; fun_decl_ok := const_fold_fun_ctx_decl_ok
-      ; fun_bound_ok := fun_bound_ok fc
-     |}.
-End FunCtx2.
+          (Ok: const_fold_calldag cd = inr cd')
+: fun_ctx cd bound -> fun_ctx cd' bound
+:= fun_ctx_map const_fold_decl (@callset_const_fold_decl C) Ok.
 
 (*************************************************************************************)
 
@@ -752,7 +551,7 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
 { (* StorageVar *)
   cbn.
   unfold storage_var_is_declared.
-  assert (F := const_fold_fun_ctx_declmap ok name).
+  assert (F := calldag_maybe_map_declmap const_fold_decl (@callset_const_fold_decl C) ok name).
   destruct (cd_declmap cd name), (cd_declmap cd' name); try easy.
   destruct d; cbn in F; inversion F. { now subst. }
   remember (const_fold_stmt body) as body'.
@@ -799,15 +598,10 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
   {
     intros.
     cbn. rewrite<- Left. cbn.
-    (* This doesn't work with the normal term.
-       Perhaps this is related to the reason BinOpOk is needed at all.
-     *)
-    destruct (@interpret_expr C (S smaller_call_depth_bound) smaller_call_depth_bound
-               (@eq_refl nat (S smaller_call_depth_bound)) cd'
-               (@const_fold_fun_ctx C (S smaller_call_depth_bound) cd cd' ok fc) do_call' builtins world loc e1'
-               (@callset_descend_binop_left C (@BinOp C op e1' e2') e1' e2' op
-                  (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-                  (@eq_refl (@expr C) (@BinOp C op e1' e2')) CallOk'0)) as (world', result_a).
+    match goal with
+    |- (let (world', result_a) := ?x in _) = _ =>
+          destruct x as (world', result_a)
+    end.
     destruct result_a. 2:reflexivity.
     cbn. now rewrite Right.
   }
@@ -964,7 +758,8 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     interpret_expr_list (world0 : world_state) (loc0 : string_map uint256) 
                         (e : list expr)
                         (CallOk0 : FSet.is_subset (expr_list_callset e)
-                                     (decl_callset (cached_const_folded_decl ok fc)) = true) {struct
+                                     (decl_callset (cached_mapped_decl const_fold_decl
+                                           (@callset_const_fold_decl C) ok fc)) = true) {struct
                         e} : world_state * Base.expr_result (list uint256) :=
       match e as e' return (e = e' -> world_state * Base.expr_result (list uint256)) with
       | nil => fun _ : e = nil => (world0, Base.ExprSuccess nil)
@@ -991,22 +786,30 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     intros. cbn.
     assert (Irrel:
         (@callset_descend_head C a args' (a :: args')
-          (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-          (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
+          (@decl_callset C
+             (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
          =
         (@callset_descend_head C a args' (a :: args')
-          (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-          (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
+        (@decl_callset C
+           (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+              (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+              (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
     { apply PropExtensionality.proof_irrelevance. }
     rewrite Irrel.
     destruct interpret_expr. destruct e. 2:{ trivial. }
     now rewrite (IHargs' w loc 
                   (@callset_descend_tail C a args' (a :: args')
-                    (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-                    (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
+                    (@decl_callset C
+                       (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                          (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                          (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
                   (@callset_descend_tail C a args' (a :: args')
-                    (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-                    (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
+                    (@decl_callset C
+                       (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                          (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                          (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok) ).
   }
   rewrite<- (R' (callset_descend_args eq_refl CallOk')). clear R'.
   assert (W := weak_interpret_const_fold_expr_list builtins ok fc DoCallOk world loc Heqcargs
@@ -1137,7 +940,7 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     {
       intros. subst. unfold const_fold_fun_ctx. cbn.
       f_equal.
-      assert (D: d2 = cached_const_folded_decl ok
+      assert (D: d2 = cached_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok
               {|
               fun_name := name;
               fun_depth := depth;
@@ -1146,19 +949,19 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
               fun_decl_ok := Edecl1;
               fun_bound_ok := Descend.call_descend' fc CallOk eq_refl eq_refl Edecl1 Edepth1 |}).
       {
-        unfold cached_const_folded_decl. cbn.
-        remember (translate_fun_ctx_fun_decl_helper ok _) as Bad. clear HeqBad.
+        unfold cached_mapped_decl. cbn.
+        remember (Calldag.calldag_maybe_map_fun_ctx_fun_decl_helper _ _ ok _) as Bad. clear HeqBad.
         cbn in Bad. revert Bad.
         destruct (cd_declmap cd' name). { now inversion Edecl2. }
         intro Bad. discriminate.
       }
-      subst. f_equal; apply PropExtensionality.proof_irrelevance.
+      subst. unfold fun_ctx_map. cbn. f_equal; apply PropExtensionality.proof_irrelevance.
     } (* SomeBranchOk *)
     clear Heqsome_branch_l Heqsome_branch_r
           CallOk CallOk' Edecl1 Edecl2 d1 d2 args value DoCallOk
           do_call do_call' H Heqcargs W.
     revert some_branch_l some_branch_r SomeBranchOk.
-    rewrite (const_fold_fun_ctx_depthmap ok name).
+    rewrite (calldag_maybe_map_depthmap_ok const_fold_decl _ ok name).
     destruct (cd_depthmap cd' name), (cd_depthmap cd name); intros;
       try apply SomeBranchOk; rewrite (NoneOkL eq_refl); rewrite (NoneOkR eq_refl); trivial.
   } (* InnerOk *)
@@ -1185,7 +988,7 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     clear Heqsome_branch'.
     remember (cd_declmap cd' name) as maybe_d'.
     destruct maybe_d'. { apply SomeBranchOk. }
-    assert (T := const_fold_fun_ctx_declmap ok name).
+    assert (T := calldag_maybe_map_declmap const_fold_decl _ ok name).
     rewrite<- Heqmaybe_d' in T.
     rewrite<- Heqmaybe_d in T.
     discriminate.
@@ -1197,7 +1000,7 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
              None).
   {
     intros.
-    assert (T := const_fold_fun_ctx_declmap ok name).
+    assert (T := calldag_maybe_map_declmap const_fold_decl _ ok name).
     rewrite<- Heqmaybe_d in T. rewrite Edecl in T.
     discriminate.
   }
@@ -1229,7 +1032,7 @@ assert (R':
   interpret_expr_list (world0 : world_state) (loc0 : string_map uint256) 
                       (e : list expr)
                       (CallOk0 : FSet.is_subset (expr_list_callset e)
-                                   (decl_callset (cached_const_folded_decl ok fc)) = true) {struct
+                                   (decl_callset (cached_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok fc)) = true) {struct
                       e} : world_state * Base.expr_result (list uint256) :=
     match e as e' return (e = e' -> world_state * Base.expr_result (list uint256)) with
     | nil => fun _ : e = nil => (world0, Base.ExprSuccess nil)
@@ -1255,23 +1058,31 @@ assert (R':
   revert world loc. induction args'. { easy. }
   intros. cbn.
   assert (Irrel:
-      (@callset_descend_head C a args' (a :: args')
-        (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-        (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
+        (@callset_descend_head C a args' (a :: args')
+        (@decl_callset C
+           (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+              (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+              (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
        =
-      (@callset_descend_head C a args' (a :: args')
-        (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-        (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
+         (@callset_descend_head C a args' (a :: args')
+        (@decl_callset C
+           (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+              (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+              (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
   { apply PropExtensionality.proof_irrelevance. }
   rewrite Irrel.
   destruct interpret_expr. destruct e. 2:{ trivial. }
   now rewrite (IHargs' w loc 
                 (@callset_descend_tail C a args' (a :: args')
-                  (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-                  (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
+                  (@decl_callset C
+                     (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                        (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                        (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
                 (@callset_descend_tail C a args' (a :: args')
-                  (@decl_callset C (@cached_const_folded_decl C (S smaller_call_depth_bound) cd cd' ok fc))
-                  (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
+                  (@decl_callset C
+                     (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                        (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                        (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
 }
 rewrite<- (R' (callset_descend_builtin_args eq_refl CallOk')). clear R'.
 assert (W := weak_interpret_const_fold_expr_list builtins ok fc DoCallOk world loc Heqcargs
@@ -1378,15 +1189,18 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
   destruct result'. { discriminate. }
   inversion StmtOk. subst ss'.
   cbn.
-  assert (R: @callset_descend_return C (@Return C e) e
-                (@decl_callset C (@cached_const_folded_decl C bigger_call_depth_bound cd cd' ok fc))
-                (@eq_refl (@small_stmt C) (@Return C e)) CallOk'
+  (* prepare for the next rewrite *)
+  assert (R: (@callset_descend_return C (@Return C e) e
+                (@decl_callset C
+                   (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                      (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                      bigger_call_depth_bound fc)) (@eq_refl (@small_stmt C) (@Return C e)) CallOk')
               =
-             @callset_descend_return C (@Return C e) e
-                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) false cd'
-                                bigger_call_depth_bound
-                               (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
-                 (@eq_refl (@small_stmt C) (@Return C e)) CallOk').
+         (@callset_descend_return C (@Return C e) e
+            (@decl_callset C
+               (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
+                  (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
+            (@eq_refl (@small_stmt C) (@Return C e)) CallOk')).
   { easy. }
   rewrite R.
   rewrite (interpret_const_fold_expr Ebound builtins ok fc DoCallOk world loc Heqresult'
@@ -1399,15 +1213,17 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
   destruct error'. { discriminate. }
   inversion StmtOk. subst ss'.
   cbn.
-  assert (R: @callset_descend_raise C (@Raise C e) e
-                (@decl_callset C (@cached_const_folded_decl C bigger_call_depth_bound cd cd' ok fc))
-                (@eq_refl (@small_stmt C) (@Raise C e)) CallOk'
+  assert (R: (@callset_descend_raise C (@Raise C e) e
+              (@decl_callset C
+                 (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                    (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                    bigger_call_depth_bound fc)) (@eq_refl (@small_stmt C) (@Raise C e)) CallOk')
               =
-             @callset_descend_raise C (@Raise C e) e
-                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) false cd'
-                                bigger_call_depth_bound
-                               (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
-                 (@eq_refl (@small_stmt C) (@Raise C e)) CallOk').
+             (@callset_descend_raise C (@Raise C e) e
+                (@decl_callset C
+                   (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
+                      (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
+                (@eq_refl (@small_stmt C) (@Raise C e)) CallOk')).
   { easy. }
   rewrite R.
   rewrite (interpret_const_fold_expr Ebound builtins ok fc DoCallOk world loc Heqerror'
@@ -1420,15 +1236,17 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
   destruct rhs'. { discriminate. }
   inversion StmtOk. subst ss'.
   cbn.
-  assert (R: @callset_descend_assign_rhs C (@Assign C lhs e) lhs e
-                (@decl_callset C (@cached_const_folded_decl C bigger_call_depth_bound cd cd' ok fc))
-                (@eq_refl (@small_stmt C) (@Assign C lhs e)) CallOk'
+  assert (R: (@callset_descend_assign_rhs C (@Assign C lhs e) lhs e
+                (@decl_callset C
+                   (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                      (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                      bigger_call_depth_bound fc)) (@eq_refl (@small_stmt C) (@Assign C lhs e)) CallOk')
               =
-             @callset_descend_assign_rhs C (@Assign C lhs e) lhs e
-                 (@decl_callset C (@fun_decl C (@decl C) (@decl_callset C) false cd'
-                                bigger_call_depth_bound
-                               (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
-                 (@eq_refl (@small_stmt C) (@Assign C lhs e)) CallOk').
+             (@callset_descend_assign_rhs C (@Assign C lhs e) lhs e
+              (@decl_callset C
+                 (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
+                    (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
+              (@eq_refl (@small_stmt C) (@Assign C lhs e)) CallOk')).
   { easy. }
   rewrite R.
   rewrite (interpret_const_fold_expr Ebound builtins ok fc DoCallOk world loc Heqrhs'
@@ -1438,7 +1256,7 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
   destruct result; cbn. 2:{ trivial. }
   destruct lhs. { trivial. }
   unfold storage_var_is_declared.
-  assert (D := const_fold_fun_ctx_declmap ok name).
+  assert (D := calldag_maybe_map_declmap const_fold_decl _ ok name).
   destruct (cd_declmap cd' name), (cd_declmap cd name); try discriminate; trivial.
   destruct d0; (* XXX *)
     cbn in D; inversion D; subst; trivial.
@@ -1454,18 +1272,6 @@ cbn.
 rewrite<- (interpret_const_fold_expr Ebound builtins ok fc DoCallOk world loc Heqe'
                                         (callset_descend_expr_stmt eq_refl CallOk')
                                         (callset_descend_expr_stmt eq_refl CallOk)).
-
-assert (R: @callset_descend_expr_stmt C (@ExprStmt C e') e'
-            (@decl_callset C (@cached_const_folded_decl C bigger_call_depth_bound cd cd' ok fc))
-            (@eq_refl (@small_stmt C) (@ExprStmt C e')) CallOk'
-            =
-           @callset_descend_expr_stmt C (@ExprStmt C e') e'
-            (@decl_callset C
-               (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
-                  (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
-            (@eq_refl (@small_stmt C) (@ExprStmt C e')) CallOk').
-{ easy. }
-rewrite R.
 now destruct interpret_expr.
 Qed.
 
@@ -1534,14 +1340,17 @@ induction s; intros; cbn in StmtOk; unfold sum_map in *; unfold sum_ap in *.
                     (callset_descend_var_scope eq_refl CallOk')
                     (callset_descend_var_scope eq_refl CallOk)).
   assert (R: (@callset_descend_var_scope C (@LocalVarDecl C name init' body) name init' body
-               (@decl_callset C (@cached_const_folded_decl C bigger_call_depth_bound cd cd' ok fc))
-               (@eq_refl (@stmt C) (@LocalVarDecl C name init' body)) CallOk')
-              =
-             (@callset_descend_var_scope C (@LocalVarDecl C name init' body) name init' body
                (@decl_callset C
-                 (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
-                 (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
-               (@eq_refl (@stmt C) (@LocalVarDecl C name init' body)) CallOk')).
+                  (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                     (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                     bigger_call_depth_bound fc)) (@eq_refl (@stmt C) (@LocalVarDecl C name init' body))
+               CallOk')
+              =
+              (@callset_descend_var_scope C (@LocalVarDecl C name init' body) name init' body
+                (@decl_callset C
+                   (@fun_decl C (@decl C) (@decl_callset C) false cd' bigger_call_depth_bound
+                      (@const_fold_fun_ctx C bigger_call_depth_bound cd cd' ok fc)))
+                (@eq_refl (@stmt C) (@LocalVarDecl C name init' body)) CallOk')).
   { easy. }
   rewrite R.
   now rewrite IH.
@@ -1678,26 +1487,33 @@ destruct (interpret_stmt Ebound fc do_call builtins world'
 assert (IH := IHcountdown count' world''' loc''' (Z.succ cursor)
                           WeakNextLoopEq CallOk' CallOk CountOk eq_refl).
 assert (FixCallL:
- (@callset_descend_loop_body C (@Loop C var start' count' body') body' var start' count'
-                (@decl_callset C (@cached_const_folded_decl C bigger_call_depth_bound cd cd' ok fc))
-                (@eq_refl (@stmt C) (@Loop C var start' count' body')) CallOk')
-  =
- (@callset_descend_loop_body C (@Loop C var start' count body') body' var start' count
-               (@decl_callset C (@cached_const_folded_decl C bigger_call_depth_bound cd cd' ok fc))
-               (@eq_refl (@stmt C) (@Loop C var start' count body')) CallOk'))
+         (@callset_descend_loop_body C (@Loop C var start' count' body') body' var start' count'
+            (@decl_callset C
+               (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                  (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                  bigger_call_depth_bound fc)) (@eq_refl (@stmt C) (@Loop C var start' count' body'))
+            CallOk') 
+        =
+         (@callset_descend_loop_body C (@Loop C var start' count body') body' var start' count
+            (@decl_callset C
+               (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                  (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
+                  bigger_call_depth_bound fc)) (@eq_refl (@stmt C) (@Loop C var start' count body'))
+            CallOk'))
   by apply PropExtensionality.proof_irrelevance.
+rewrite FixCallL in IH.
 assert (FixCallR:
-   (@callset_descend_loop_body C (@Loop C var start count' body) body var start count'
-    (@decl_callset C
-       (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
-    (@eq_refl (@stmt C) (@Loop C var start count' body)) CallOk)
-  =
- (@callset_descend_loop_body C (@Loop C var start count body) body var start count
-   (@decl_callset C
-      (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
-   (@eq_refl (@stmt C) (@Loop C var start count body)) CallOk))
+         (@callset_descend_loop_body C (@Loop C var start count' body) body var start count'
+            (@decl_callset C
+               (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
+            (@eq_refl (@stmt C) (@Loop C var start count' body)) CallOk)
+          =
+        (@callset_descend_loop_body C (@Loop C var start count body) body var start count
+            (@decl_callset C
+               (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
+            (@eq_refl (@stmt C) (@Loop C var start count body)) CallOk))
   by apply PropExtensionality.proof_irrelevance.
-rewrite FixCallL in IH. rewrite FixCallR in IH. clear FixCallL FixCallR.
+rewrite FixCallR in IH. clear FixCallL FixCallR.
 destruct result'''; try trivial.
 now destruct a.
 Qed.
@@ -1719,18 +1535,19 @@ Lemma interpret_const_fold_call {C: VyperConfig}
 Proof.
 revert world arg_values. induction call_depth_bound.
 { exfalso. exact (Nat.nlt_0_r _ (proj1 (Nat.ltb_lt _ _) (fun_bound_ok fc))). }
-assert(F: inr (cached_const_folded_decl ok fc)
+assert(F: inr (cached_mapped_decl const_fold_decl _ ok fc)
            =
           const_fold_decl (fun_decl fc)).
 {
   clear IHcall_depth_bound.
   unfold const_fold_fun_ctx in *. cbn in *.
-  unfold cached_const_folded_decl in *.
-  remember (translate_fun_ctx_fun_decl_helper ok fc) as foo. clear Heqfoo.
+  unfold cached_mapped_decl in *.
+  remember (Calldag.calldag_maybe_map_fun_ctx_fun_decl_helper const_fold_decl _ ok fc) as foo.
+  clear Heqfoo.
   remember (cd_declmap cd' (fun_name fc)) as d.
   destruct d. 2:{ contradiction. }
   subst.
-  assert (Q := const_fold_fun_ctx_declmap ok (fun_name fc)).
+  assert (Q := calldag_maybe_map_declmap const_fold_decl _ ok (fun_name fc)).
   destruct (cd_declmap cd' (fun_name fc)) as [d'|]. 2:discriminate.
   inversion Heqd. subst d'. clear Heqd.
   remember (cd_declmap cd (fun_name fc)) as x.
@@ -1743,7 +1560,7 @@ assert(F: inr (cached_const_folded_decl ok fc)
 intros.
 cbn.
 remember (fun name arg_names body
-              (E : cached_const_folded_decl ok fc = FunDecl name arg_names body) =>
+              (E : cached_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok fc = FunDecl name arg_names body) =>
     match Interpret.bind_args arg_names arg_values with
     | inl err => (world, Base.expr_error err)
     | inr loc =>
@@ -1780,7 +1597,7 @@ enough (B: forall name arg_names body_l body_r E_l E_r,
              branch_r name arg_names body_r E_r).
 {
   clear Heqbranch_l Heqbranch_r.
-  destruct (fun_decl fc); cbn in F; destruct cached_const_folded_decl;
+  destruct (fun_decl fc); cbn in F; destruct cached_mapped_decl;
     unfold sum_map in *; try destruct (const_fold_stmt body); try easy.
   inversion F; subst.
   apply B.
@@ -1798,4 +1615,22 @@ apply interpret_const_fold_stmt.
 { apply IHcall_depth_bound. }
 unfold sum_map in F. destruct (const_fold_stmt body_r). { discriminate. }
 inversion F. now subst.
+Qed.
+
+Theorem const_fold_ok {C: VyperConfig}
+                      {cd cd': calldag}
+                      (builtins: string -> option L10.Base.builtin)
+                      (ok: const_fold_calldag cd = inr cd')
+                      (fun_name: string)
+                      (world: world_state)
+                      (arg_values: list uint256):
+  interpret builtins cd' fun_name world arg_values
+   =
+  interpret builtins cd fun_name world arg_values.
+Proof.
+unfold interpret.
+rewrite (make_fun_ctx_and_bound_ok const_fold_decl _ ok).
+destruct (make_fun_ctx_and_bound cd fun_name) as [(bound, fc)|]; cbn.
+{ apply interpret_const_fold_call. }
+trivial.
 Qed.

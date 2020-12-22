@@ -69,7 +69,7 @@ Proof.
 rewrite N.ltb_lt in L.
 intro H. destruct H as [Cycle|Tail]. { exact (inl Cycle). }
 right. subst l. apply Forall_cons; assumption.
-Qed.
+Defined. (* transparent because the extraction wants it *)
 
 Local Lemma look_for_cycle_rec_helper_cycle
       {pm: pathmap R (length all)}

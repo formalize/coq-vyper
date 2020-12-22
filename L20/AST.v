@@ -1,7 +1,7 @@
 From Coq Require Import String List.
 
 From Vyper Require Import Config FSet.
-From Vyper.L10 Require AST Base.
+From Vyper.L10 Require AST Base ToString.
 
 Section AST.
 
@@ -103,8 +103,8 @@ Fixpoint string_of_expr (e: expr)
    | Const u => HexString.of_Z (Z_of_uint256 u)
    | LocalVar name => name
    | StorageVar name => "self." ++ name
-   | UnOp op a => "(" ++ L10.AST.string_of_unop op ++ string_of_expr a ++ ")"
-   | BinOp op a b => "(" ++ string_of_expr a ++ " " ++ L10.AST.string_of_binop op
+   | UnOp op a => "(" ++ L10.ToString.string_of_unop op ++ string_of_expr a ++ ")"
+   | BinOp op a b => "(" ++ string_of_expr a ++ " " ++ L10.ToString.string_of_binop op
                          ++ " " ++ string_of_expr b ++ ")"
    | IfThenElse cond yes no => "(" ++ string_of_expr yes ++ " if "
                                    ++ string_of_expr cond ++ " else "
@@ -135,7 +135,7 @@ Definition string_of_small_stmt (ss: small_stmt)
    | Abort a => "abort " ++ L10.Base.string_of_abort a
    | Return e => "return " ++ string_of_expr e
    | Raise e => "raise " ++ string_of_expr e
-   | Assign lhs rhs => L10.AST.string_of_assignable lhs ++ " = " ++ string_of_expr rhs
+   | Assign lhs rhs => L10.ToString.string_of_assignable lhs ++ " = " ++ string_of_expr rhs
    | ExprStmt e => string_of_expr e
    end.
 
@@ -144,14 +144,14 @@ Fixpoint lines_of_stmt (s: stmt)
 :=  match s with
     | SmallStmt ss => string_of_small_stmt ss :: nil
     | LocalVarDecl name init scope => ("with " ++ name ++ " = " ++ string_of_expr init ++ ":")
-                                    :: L10.AST.add_indent (lines_of_stmt scope)
+                                    :: L10.ToString.add_indent (lines_of_stmt scope)
     | IfElseStmt cond yes no => ("if " ++ string_of_expr cond ++ ":")
-                                :: L10.AST.add_indent (lines_of_stmt yes)
-                                ++ "else:" :: L10.AST.add_indent (lines_of_stmt no)
+                                :: L10.ToString.add_indent (lines_of_stmt yes)
+                                ++ "else:" :: L10.ToString.add_indent (lines_of_stmt no)
     | Loop name start count body =>  ("for " ++ name ++ " in count("
                                        ++ string_of_expr start ++ ", "
                                        ++ HexString.of_Z (Z_of_uint256 count) ++ "):")
-                                       :: L10.AST.add_indent (lines_of_stmt body)
+                                       :: L10.ToString.add_indent (lines_of_stmt body)
     | Semicolon a b => lines_of_stmt a ++ lines_of_stmt b
     end.
 
@@ -164,10 +164,11 @@ Definition lines_of_decl (d: decl)
          | nil => ""
          | h :: t => h ++ fold_right (fun x tail => ", " ++ x ++ tail) "" t
          end ++ "):")
-       :: L10.AST.add_indent (lines_of_stmt body)
+       :: L10.ToString.add_indent (lines_of_stmt body)
    end.
 
 Definition string_of_decl (d: decl)
-:= L10.AST.newline ++ fold_right (fun x tail => x ++ L10.AST.newline ++ tail) "" (lines_of_decl d).
+:= let newline := "
+" in newline ++ fold_right (fun x tail => x ++ newline ++ tail) "" (lines_of_decl d).
 
 End AST.

@@ -75,6 +75,7 @@ destruct a as (k, v). cbn.
 now destruct (EqDec x k).
 Qed.
 
+(** [make_varmap] builds a varmap successfully if there's no duplicate variable name. *)
 Lemma varmap_if_nodup {C: VyperConfig}
                       (names: list string)
                       (ND: NoDup names)
@@ -461,6 +462,7 @@ split. 2:assumption.
 lia.
 Qed.
 
+(** If [make_varmap] finishes succesfully, the result maps a name to its index in the [names] list. *)
 Lemma varmap_index {C: VyperConfig}
                    (names: list string)
                    (varmap: string_map N)

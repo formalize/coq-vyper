@@ -1,7 +1,7 @@
 From Coq Require Import String NArith DecimalString HexString.
 
 From Vyper Require Import Config FSet.
-From Vyper.L10 Require AST Base.
+From Vyper.L10 Require AST Base ToString.
 
 Section AST.
 
@@ -51,11 +51,11 @@ Definition string_of_small_stmt (ss: small_stmt)
                             ++ " [" ++ NilZero.string_of_uint (N.to_uint src) ++ "]"
    | UnOp op dst src => "[" ++ NilZero.string_of_uint (N.to_uint dst)
                         ++ "] <- "
-                        ++ L10.AST.string_of_unop op
+                        ++ L10.ToString.string_of_unop op
                         ++ "[" ++ NilZero.string_of_uint (N.to_uint src) ++ "]"
    | BinOp op dst src1 src2 => "[" ++ NilZero.string_of_uint (N.to_uint dst)
                                ++ "] <- [" ++ NilZero.string_of_uint (N.to_uint src1) ++ "]"
-                               ++ L10.AST.string_of_binop op
+                               ++ L10.ToString.string_of_binop op
                                ++ "[" ++ NilZero.string_of_uint (N.to_uint src2) ++ "]"
    | PrivateCall dst name args_offset args_count =>
        "[" ++ NilZero.string_of_uint (N.to_uint dst)
@@ -78,11 +78,11 @@ Fixpoint lines_of_stmt (s: stmt)
 :=  match s with
     | SmallStmt ss => string_of_small_stmt ss :: nil
     | IfElseStmt cond yes no => ("if [" ++ NilZero.string_of_uint (N.to_uint cond) ++ "]:")
-                                :: L10.AST.add_indent (lines_of_stmt yes)
-                                ++ "else:" :: L10.AST.add_indent (lines_of_stmt no)
+                                :: L10.ToString.add_indent (lines_of_stmt yes)
+                                ++ "else:" :: L10.ToString.add_indent (lines_of_stmt no)
     | Loop var count body =>  ("for [" ++ NilZero.string_of_uint (N.to_uint var) ++ "] in count("
                                        ++ HexString.of_Z (Z_of_uint256 count) ++ "):")
-                                       :: L10.AST.add_indent (lines_of_stmt body)
+                                       :: L10.ToString.add_indent (lines_of_stmt body)
     | Semicolon a b => lines_of_stmt a ++ lines_of_stmt b
     end.
 
@@ -92,11 +92,11 @@ Definition lines_of_decl (d: decl)
     | StorageVarDecl name => ("var " ++ name)%string :: nil
     | FunDecl name args body =>
         ("def " ++ name ++ "/" ++ NilZero.string_of_uint (N.to_uint args) ++ ":")%string
-        :: L10.AST.add_indent (lines_of_stmt body)
+        :: L10.ToString.add_indent (lines_of_stmt body)
     end)%list.
 
 Definition string_of_decl (d: decl)
-:= L10.AST.newline
-   ++ List.fold_right (fun x tail => x ++ L10.AST.newline ++ tail) "" (lines_of_decl d).
+:= let newline := "
+" in newline ++ List.fold_right (fun x tail => x ++ newline ++ tail) "" (lines_of_decl d).
 
 End AST.

@@ -1,4 +1,5 @@
 From Coq Require Import String List ListSet Arith NArith.
+From Coq Require PropExtensionality.
 From Vyper Require Map FSet MapSig.
 From Vyper Require Import Config Graph.Depthmap.
 
@@ -487,3 +488,619 @@ Definition cycle_error_message {C: VyperConfig} {Decl: Type}
           | Path.Cons _ _ rest => (proj1_sig v ++ " -> " ++ path_to_string rest)%string
           end
    in ("recursion is not allowed but a call cycle is detected: " ++ path_to_string (Cycle.path cycle)).
+
+
+(** This is an adapter between [make_depthmap],
+    which returns a total function on declared names into N,
+    and [generic_calldag], which wants a partial function on all strings. 
+ *)
+Definition adapt_depthmap {C: VyperConfig} {Decl} (callset: Decl -> string_set) (declmap: string_map Decl)
+                          (depthmap: {f: declared_name declmap -> N |
+                                       forall a b : declared_name declmap,
+                                         Calls callset a b -> (f b < f a)%N})
+                          (name: string)
+: option nat
+:= (if has declmap name as has' return _ = has' -> _
+      then fun E => Some (N.to_nat (proj1_sig depthmap (exist _ name E)))
+      else fun _ => None) eq_refl.
+
+Lemma adapt_depthmap_ok {C: VyperConfig} {Decl} (callset: Decl -> string_set)
+                        (declmap: string_map Decl)
+                        (depthmap:
+                          {f: declared_name declmap -> N |
+                             forall a b: declared_name declmap,
+                               Calls callset a b -> (f b < f a)%N})
+                        (name: string):
+   let _ := string_map_impl in
+   match Map.lookup declmap name with
+   | Some decl =>
+       match adapt_depthmap callset declmap depthmap name with
+       | Some x =>
+           let _ := string_set_impl in
+           FSet.for_all (callset decl)
+             (fun callee : string =>
+              match adapt_depthmap callset declmap depthmap callee with
+              | Some y => y <? x
+              | None => true
+              end) = true
+       | None => False
+       end
+   | None => True
+   end.
+Proof.
+unfold adapt_depthmap.
+remember (Map.lookup declmap name) as d.
+destruct d. 2:{ trivial. }
+remember (fun x =>
+      let _ := @string_set_impl C in
+      FSet.for_all (callset d)
+      (fun callee : string =>
+       match
+         (if has declmap callee as has' return (has declmap callee = has' -> option nat)
+          then
+           fun E : has declmap callee = true =>
+           Some
+             (N.to_nat
+                (proj1_sig depthmap (exist (fun name0 : string => has declmap name0 = true) callee E)))
+          else fun _ : has declmap callee = false => None) eq_refl
+       with
+       | Some y => y <? x
+       | None => true
+       end) = true) as P.
+assert (T: has declmap name = true). { unfold has in *. now rewrite<- Heqd. }
+assert (R: forall name' (E': has declmap name' = true),
+   (if has declmap name' as has' return (has declmap name' = has' -> option nat)
+   then
+    fun E : has declmap name' = true =>
+    Some
+      (N.to_nat (proj1_sig depthmap (exist (fun name0 : string => has declmap name0 = true) name' E)))
+   else fun _ : has declmap name' = false => None) eq_refl =
+  Some
+      (N.to_nat (proj1_sig depthmap (exist (fun name0 : string => has declmap name0 = true) name' E')))).
+{
+  intros.
+  remember (fun E =>
+              Some (N.to_nat
+                     (proj1_sig depthmap 
+                        (exist (fun name0 : string => has declmap name0 = true) name' E)))) as f.
+  match goal with
+  |- _ = ?rhs => replace rhs with (f E') by now subst
+  end.
+  clear Heqf.
+  destruct (has declmap name'). { f_equal. apply Eqdep_dec.eq_proofs_unicity. decide equality. }
+  discriminate.
+}
+rewrite (R name T). subst P. cbn.
+rewrite FSet.for_all_ok.
+intros callee CalleeOk.
+remember (fun y: nat =>
+    match
+      N.to_nat (proj1_sig depthmap (exist (fun name0 : string => has declmap name0 = true) name T))
+    with
+    | 0 => false
+    | S m' => y <=? m'
+    end) as some_branch.
+assert (Ok: forall E: has declmap callee = true,
+            some_branch
+              (N.to_nat
+                (proj1_sig depthmap
+                           (exist (fun name0 : string => has declmap name0 = true) callee E))) = true).
+{
+  intro E. subst.
+  assert (K := proj2_sig depthmap (exist (fun name0 : string => has declmap name0 = true) name T)
+                         (exist _ callee E)).
+  unfold Calls in K.
+  assert (D:
+     decl_of_declared_name (exist (fun name0 : string => has declmap name0 = true) name T) = d).
+  {
+    unfold decl_of_declared_name.
+    cbn.
+    remember (fun E0 : Map.lookup declmap name = None =>
+    False_rect Decl
+      (Calldag.decl_of_declared_name_helper
+         (exist (fun name0 : string => has declmap name0 = true) name T) E0 T)) as bad.
+    clear Heqbad.
+    destruct (Map.lookup declmap name). { now inversion Heqd. } discriminate.
+  }
+  rewrite D in K. clear D. cbn in K.
+  assert (L := K CalleeOk). clear K.
+  unfold Calls in *. (* invisible fix *)
+  remember (proj1_sig depthmap (exist (fun name : string => has declmap name = true) name T)) as x.
+  remember (proj1_sig depthmap (exist (fun name : string => has declmap name = true) callee E)) as y.
+  clear Heqx Heqy.
+  apply N.compare_lt_iff in L.
+  rewrite N2Nat.inj_compare in L.
+  apply nat_compare_lt in L.
+  destruct (N.to_nat x). { now apply Nat.nlt_0_r in L. }
+  rewrite Nat.leb_le.
+  now apply lt_n_Sm_le.
+}
+clear Heqsome_branch.
+(* caveman's destruct *)
+assert (X: forall x: bool, x = true \/ x = false). { destruct x; tauto. }
+assert (H := X (has declmap callee)). clear X.
+case H; clear H; intro H.
+{ rewrite (R callee H). apply Ok. }
+clear R.
+enough (R: (if has declmap callee as has' return (has declmap callee = has' -> option nat)
+             then
+              fun E : has declmap callee = true =>
+              Some
+                (N.to_nat (proj1_sig depthmap (exist (fun name0 : string => has declmap name0 = true) callee E)))
+             else fun _ : has declmap callee = false => None) eq_refl = None).
+{ now rewrite R. }
+clear Ok.
+remember (fun E =>
+            Some (N.to_nat
+                   (proj1_sig depthmap 
+                      (exist (fun name0 : string => has declmap name0 = true) callee E)))) as f.
+clear Heqf.
+now destruct (has declmap callee).
+Qed.
+
+(** Build a calldag from a list of declarations (the declaration type is polymorphic).
+    Two errors are possible: duplicated declaration and a call cycle.
+    Calling an undeclared function is allowed since L10 does that to call builtin functions.
+ *)
+Definition make_calldag {C: VyperConfig} {Decl} 
+                        (decl_name: Decl -> string)
+                        (callset: Decl -> string_set)
+                        (decls: list Decl)
+: string + generic_calldag callset true
+:= match make_declmap decl_name decls with
+   | inl err => inl err
+   | inr declmap =>
+      match make_depthmap declmap callset with
+      | inl cycle => inl (cycle_error_message declmap cycle)
+      | inr depthmap =>
+          inr {| cd_decls := declmap
+               ; cd_depthmap := adapt_depthmap callset declmap depthmap
+               ; cd_depthmap_ok := adapt_depthmap_ok callset declmap depthmap
+              |}
+      end
+   end.
+
+(***************************************************************************************************)
+
+Local Lemma calldag_maybe_map_helper {C: VyperConfig}
+                          {Decl Decl': Type}
+                          {callset: Decl -> string_set}
+                          {may_call_undeclared: bool}
+                          {callset': Decl' -> string_set}
+                          (cd: generic_calldag callset may_call_undeclared)
+                          (f: Decl -> string + Decl')
+                          (decls': string_map Decl')
+                          (NoNewCalls: let _ := string_set_impl in
+                                       forall (d: Decl) (d': Decl'),
+                                         f d = inr d'
+                                          ->
+                                         FSet.is_subset (callset' d') (callset d) = true):
+     let _ := string_map_impl Decl  in
+     let _ := string_map_impl Decl' in
+     forall (E: map_maybe_map (cd_decls cd) f = inr decls')
+            (name: string),
+       match Map.lookup decls' name with
+       | Some decl =>
+           match cd_depthmap cd name with
+           | Some x =>
+               let _ := string_set_impl in
+               FSet.for_all (callset' decl)
+                 (fun callee: string =>
+                  match cd_depthmap cd callee with
+                  | Some y => y <? x
+                  | None => may_call_undeclared
+                  end) = true
+           | None => False
+           end
+       | None => True
+       end.
+Proof.
+intros.
+remember (Map.lookup _ name) as m.
+destruct m. 2:trivial.
+assert (D := cd_depthmap_ok cd name).
+assert (F := map_maybe_map_ok E name).
+destruct (Map.lookup (cd_decls cd) name). 2:{ now rewrite F in Heqm. }
+destruct (cd_depthmap cd name). 2:assumption.
+rewrite FSet.for_all_ok. rewrite FSet.for_all_ok in D.
+intros x H.
+remember (f _) as d'.
+destruct d'. { contradiction. }
+rewrite<- Heqm in F. inversion F; subst.
+assert (NNC := NoNewCalls _ _ (eq_sym Heqd')).
+rewrite FSet.is_subset_ok in NNC.
+assert (NNCx := NNC x). clear NNC.
+rewrite H in NNCx.
+cbn in NNCx.
+apply (D x NNCx).
+Qed.
+
+(** Apply a partial function [f] to every declaration in the calldag.
+    Returns an error if [f] cannot be applied to at least one declaration.
+    If should introduce no new calls, then the depthmap is going to be still valid.
+ *)
+Definition calldag_maybe_map {C: VyperConfig} {Decl Decl'}
+                             {callset: Decl -> string_set}
+                             {may_call_undeclared: bool}
+                             {callset': Decl' -> string_set}
+                             (f: Decl -> string + Decl')
+                             (NoNewCalls: let _ := string_set_impl in
+                                          forall (d: Decl) (d': Decl'),
+                                            f d = inr d'
+                                             ->
+                                            FSet.is_subset (callset' d') (callset d) = true)
+                             (cd: generic_calldag callset may_call_undeclared)
+: string + generic_calldag callset' may_call_undeclared
+:= let D := @string_map_impl C Decl in
+   let D' := @string_map_impl C Decl' in
+   match map_maybe_map (cd_decls cd) f as cd' return _ = cd' -> _ with
+   | inl err => fun _ => inl err
+   | inr decls' => fun E => inr
+     {| cd_decls := decls'
+      ; cd_depthmap := cd_depthmap cd
+      ; cd_depthmap_ok := calldag_maybe_map_helper cd f decls' NoNewCalls E
+     |}
+   end eq_refl.
+
+(** [calldag_maybe_map] preserves the depthmap.
+    This should be trivial since the depthmap is literally unchanged.
+    However, this still requires some effort due to dependent types.
+ *)
+Lemma calldag_maybe_map_depthmap_ok {C: VyperConfig} {Decl Decl'}
+                                    {callset: Decl -> string_set}
+                                    {may_call_undeclared: bool}
+                                    {callset': Decl' -> string_set}
+                                    (f: Decl -> string + Decl')
+                                    (NoNewCalls: let _ := string_set_impl in
+                                                 forall (d: Decl) (d': Decl'),
+                                                   f d = inr d'
+                                                    ->
+                                                   FSet.is_subset (callset' d') (callset d) = true)
+                                    {cd:  generic_calldag callset  may_call_undeclared}
+                                    {cd': generic_calldag callset' may_call_undeclared}
+                                    (Ok: calldag_maybe_map f NoNewCalls cd = inr cd')
+                                    (name: string):
+  cd_depthmap cd name
+   =
+  cd_depthmap cd' name.
+Proof.
+destruct cd as (decls, depthmap, depthmap_ok).
+unfold calldag_maybe_map in Ok.
+cbn in *.
+remember (fun decls' (E : map_maybe_map decls f = inr decls') =>
+           inr
+             {|
+             cd_decls := decls';
+             cd_depthmap := depthmap;
+             cd_depthmap_ok := calldag_maybe_map_helper
+                                 {|
+                                   cd_decls := decls;
+                                   cd_depthmap := depthmap;
+                                   cd_depthmap_ok := depthmap_ok 
+                                 |} f decls' NoNewCalls E
+             |}) as good_branch.
+assert (K: forall (d': string_map Decl')
+                  (E: map_maybe_map decls f = inr d'),
+             good_branch d' E = inr cd'
+              ->
+             cd_depthmap cd' name = depthmap name).
+{
+  intros. subst.
+  inversion H. now subst.
+}
+clear Heqgood_branch.
+destruct map_maybe_map as [|d']. { discriminate. }
+symmetry.
+apply (K d' eq_refl Ok).
+Qed.
+
+(** This is how [calldag_maybe_map] works on the declmap. *)
+Lemma calldag_maybe_map_declmap {C: VyperConfig} {Decl Decl'}
+                                {callset: Decl -> string_set}
+                                {may_call_undeclared: bool}
+                                {callset': Decl' -> string_set}
+                                (f: Decl -> string + Decl')
+                                (NoNewCalls: let _ := string_set_impl in
+                                             forall (d: Decl) (d': Decl'),
+                                               f d = inr d'
+                                                ->
+                                               FSet.is_subset (callset' d') (callset d) = true)
+                                {cd:  generic_calldag callset  may_call_undeclared}
+                                {cd': generic_calldag callset' may_call_undeclared}
+                                (Ok: calldag_maybe_map f NoNewCalls cd = inr cd')
+                                (name: string):
+  match cd_declmap cd name with
+  | Some d => Some (f d)
+  | None => None
+  end
+   =
+  match cd_declmap cd' name with
+  | Some d => Some (inr d)
+  | None => None
+  end.
+Proof.
+destruct cd as (decls, depthmap, depthmap_ok).
+unfold calldag_maybe_map in Ok.
+cbn in *.
+remember (fun decls' (E : map_maybe_map decls f = inr decls') =>
+         inr
+           {|
+           cd_decls := decls';
+           cd_depthmap := depthmap;
+           cd_depthmap_ok := calldag_maybe_map_helper
+                               {|
+                               cd_decls := decls;
+                               cd_depthmap := depthmap;
+                               cd_depthmap_ok := depthmap_ok |} f decls' NoNewCalls E |})
+  as good_branch.
+unfold cd_declmap. cbn.
+assert (K: forall (d': string_map Decl')
+                  (E: map_maybe_map decls f = inr d'),
+             good_branch d' E = inr cd'
+              ->
+             let _ := string_map_impl Decl in
+             let _ := string_map_impl Decl' in
+             match Map.lookup decls name with
+             | Some d => Some (f d)
+             | None => None
+             end = match Map.lookup (cd_decls cd') name with
+                   | Some d => Some (inr d)
+                   | None => None
+                   end).
+{
+  intros. subst.
+  inversion H. subst.
+  cbn.
+  clear H Ok.
+  assert (M := map_maybe_map_ok E name).
+  destruct (Map.lookup decls name). 2:{ now destruct Map.lookup. }
+  destruct (f d). { contradiction. }
+  (* interestingly, rewrite M doesn't work *)
+  destruct Map.lookup. { now inversion M. }
+  discriminate.
+}
+clear Heqgood_branch.
+destruct (map_maybe_map decls f) as [|d']. { discriminate. }
+apply (K d' eq_refl Ok).
+Qed.
+
+Section CalldagMaybeMapFunCtx.
+  Context {C: VyperConfig} {Decl Decl'}
+          {callset: Decl -> string_set}
+          {may_call_undeclared: bool}
+          {callset': Decl' -> string_set}
+          (f: Decl -> string + Decl')
+          (NoNewCalls: let _ := string_set_impl in
+                       forall (d: Decl) (d': Decl'),
+                         f d = inr d'
+                          ->
+                         FSet.is_subset (callset' d') (callset d) = true)
+          {cd:  generic_calldag callset  may_call_undeclared}
+          {cd': generic_calldag callset' may_call_undeclared}
+          (Ok: calldag_maybe_map f NoNewCalls cd = inr cd')
+          {bound: nat}
+          (fc: fun_ctx cd bound).
+
+  Local Lemma calldag_maybe_map_fun_ctx_fun_decl_helper:
+    cd_declmap cd' (fun_name fc) <> None.
+  Proof.
+  intro E.
+  assert (F := fun_decl_ok fc).
+  assert (M := calldag_maybe_map_declmap f NoNewCalls Ok (fun_name fc)).
+  rewrite F in M.
+  rewrite E in M.
+  discriminate.
+  Qed.
+
+  (** This is the [Decl'] to which [f] maps the name of [fc] *)
+  Definition cached_mapped_decl
+  : Decl'
+  := match cd_declmap cd' (fun_name fc)
+     as d' return _ = d' -> _
+     with
+     | Some f => fun _ => f
+     | None => fun E =>
+          False_rect _ (calldag_maybe_map_fun_ctx_fun_decl_helper E)
+     end eq_refl.
+
+  Local Lemma cached_mapped_decl_ok:
+    cd_declmap cd' (fun_name fc)
+     =
+    Some cached_mapped_decl.
+  Proof.
+  assert (D := fun_decl_ok fc).
+  unfold cached_mapped_decl.
+  remember calldag_maybe_map_fun_ctx_fun_decl_helper as foo. clear Heqfoo. revert foo.
+  destruct (cd_declmap cd' (fun_name fc)). { trivial. }
+  intro. contradiction.
+  Qed.
+
+  Local Lemma calldag_maybe_map_fun_ctx_depth_ok:
+    cd_depthmap cd' (fun_name fc) = Some (fun_depth fc).
+  Proof.
+  rewrite<- (calldag_maybe_map_depthmap_ok f NoNewCalls Ok).
+  apply (fun_depth_ok fc).
+  Qed.
+
+  (** Apply [calldag_maybe_map] to a function context.
+   *)
+  Definition fun_ctx_map
+  : fun_ctx cd' bound
+  := {| fun_name := fun_name fc
+      ; fun_depth := fun_depth fc
+      ; fun_depth_ok := calldag_maybe_map_fun_ctx_depth_ok
+      ; fun_decl := cached_mapped_decl
+      ; fun_decl_ok := cached_mapped_decl_ok
+      ; fun_bound_ok := fun_bound_ok fc
+     |}.
+End CalldagMaybeMapFunCtx.
+
+(** Creating a function context from scratch in a calldag mapped with [calldag_maybe_map]
+    is the same as creating it in the original calldag and than mapping it with [fun_ctx_map].
+ *)
+Lemma make_fun_ctx_and_bound_ok {C: VyperConfig} {Decl Decl'}
+                                {callset: Decl -> string_set}
+                                {may_call_undeclared: bool}
+                                {callset': Decl' -> string_set}
+                                (f: Decl -> string + Decl')
+                                (NoNewCalls: let _ := string_set_impl in
+                                             forall (d: Decl) (d': Decl'),
+                                               f d = inr d'
+                                                ->
+                                               FSet.is_subset (callset' d') (callset d) = true)
+                                {cd:  generic_calldag callset  may_call_undeclared}
+                                {cd': generic_calldag callset' may_call_undeclared}
+                                (Ok: calldag_maybe_map f NoNewCalls cd = inr cd')
+                                (fun_name: string):
+   make_fun_ctx_and_bound cd' fun_name
+    =
+   match make_fun_ctx_and_bound cd fun_name with
+   | Some (existT _ bound fc) => Some (existT _ bound (fun_ctx_map f NoNewCalls Ok fc))
+   | None => None
+   end.
+Proof.
+(* this is surprisingly complicated due to a lot of convoy destructuring *)
+unfold make_fun_ctx_and_bound.
+remember (fun d (Ed : cd_declmap cd' fun_name = Some d) =>
+    match
+      cd_depthmap cd' fun_name as depth'
+      return (cd_depthmap cd' fun_name = depth' -> option {bound : nat & fun_ctx cd' bound})
+    with
+    | Some depth =>
+        fun Edepth : cd_depthmap cd' fun_name = Some depth =>
+        Some
+          (existT (fun bound : nat => fun_ctx cd' bound) (S depth)
+             {|
+             fun_name := fun_name;
+             fun_depth := depth;
+             fun_depth_ok := Edepth;
+             fun_decl := d;
+             fun_decl_ok := Ed;
+             fun_bound_ok := proj2 (Nat.ltb_lt depth (S depth)) (Nat.lt_succ_diag_r depth) |})
+    | None =>
+        fun Edepth : cd_depthmap cd' fun_name = None =>
+        False_rect (option {bound : nat & fun_ctx cd' bound}) (make_fun_ctx_helper Ed Edepth)
+    end eq_refl) as lhs_some_branch.
+remember (fun d (Ed : cd_declmap cd fun_name = Some d) =>
+      match
+        cd_depthmap cd fun_name as depth'
+        return (cd_depthmap cd fun_name = depth' -> option {bound : nat & fun_ctx cd bound})
+      with
+      | Some depth =>
+          fun Edepth : cd_depthmap cd fun_name = Some depth =>
+          Some
+            (existT (fun bound : nat => fun_ctx cd bound) (S depth)
+               {|
+               fun_name := fun_name;
+               fun_depth := depth;
+               fun_depth_ok := Edepth;
+               fun_decl := d;
+               fun_decl_ok := Ed;
+               fun_bound_ok := proj2 (Nat.ltb_lt depth (S depth)) (Nat.lt_succ_diag_r depth) |})
+      | None =>
+          fun Edepth : cd_depthmap cd fun_name = None =>
+          False_rect (option {bound : nat & fun_ctx cd bound}) (make_fun_ctx_helper Ed Edepth)
+      end eq_refl) as rhs_some_branch.
+enough (SomeBranchOk: forall d' d Ed' Ed
+                             (DeclOk: f d = inr d'),
+                        lhs_some_branch d' Ed'
+                         =
+                        match rhs_some_branch d Ed with
+                        | Some (existT _ bound fc) =>
+                            Some
+                              (existT _ bound
+                                 (fun_ctx_map f NoNewCalls Ok fc))
+                        | None => None
+                        end).
+{
+  cbn in *.
+  remember (fun _: _ = None => None) as lhs_none_branch.
+  assert (NoneBranchOk: forall E, lhs_none_branch E = None).
+  { subst. trivial. }
+  clear Heqlhs_some_branch Heqrhs_some_branch Heqlhs_none_branch.
+  assert (T := calldag_maybe_map_declmap f NoNewCalls Ok fun_name).
+  destruct (cd_declmap cd fun_name); destruct (cd_declmap cd' fun_name);
+    try easy.
+  apply SomeBranchOk.
+  now inversion T.
+}
+subst. cbn. intros.
+
+remember (fun depth (Edepth : @cd_depthmap C Decl' callset' may_call_undeclared cd' fun_name = @Some nat depth) =>
+    @Some {bound : nat & @fun_ctx C Decl' callset' may_call_undeclared cd' bound}
+      (@existT nat (fun bound : nat => @fun_ctx C Decl' callset' may_call_undeclared cd' bound)
+         (S depth)
+         {|
+         fun_name := fun_name;
+         fun_depth := depth;
+         fun_depth_ok := Edepth;
+         fun_decl := d';
+         fun_decl_ok := Ed';
+         fun_bound_ok := _ |}))
+  as depth_lhs_some_branch.
+remember (fun depth (Edepth : cd_depthmap cd fun_name = Some depth) =>
+      Some
+        (existT (fun bound : nat => fun_ctx cd bound) (S depth)
+           _))
+  as depth_rhs_some_branch.
+enough (A: forall depth E' E,
+          depth_lhs_some_branch depth E'
+           =
+          match depth_rhs_some_branch depth E with
+          | Some (existT _ bound fc) =>
+              Some
+                (existT (fun bound' : nat => fun_ctx cd' bound') bound
+                   (fun_ctx_map f NoNewCalls Ok fc))
+          | None => None
+          end).
+{
+  clear Heqdepth_lhs_some_branch Heqdepth_rhs_some_branch.
+  remember (fun Edepth : cd_depthmap cd' fun_name = None =>
+      False_rect (option {bound : nat & fun_ctx cd' bound}) (Calldag.make_fun_ctx_helper Ed' Edepth))
+    as lhs_none_branch.
+  remember (fun Edepth : cd_depthmap cd fun_name = None =>
+        False_rect (option {bound : nat & fun_ctx cd bound}) (Calldag.make_fun_ctx_helper Ed Edepth))
+    as rhs_none_branch.
+  clear Heqlhs_none_branch Heqrhs_none_branch.
+  assert (Guard' := make_fun_ctx_helper Ed').
+  assert (Guard  := make_fun_ctx_helper Ed).
+  assert (T := calldag_maybe_map_depthmap_ok f NoNewCalls Ok fun_name).
+  destruct (cd_depthmap cd' fun_name), (cd_depthmap cd fun_name); try easy.
+  inversion T. subst.
+  apply A.
+}
+intros. subst.
+f_equal. f_equal.
+unfold fun_ctx_map. cbn.
+assert (FunCtxEq: forall name1 depth depth_ok1 decl1 decl_ok1 bound_ok1
+                         name2       depth_ok2 decl2 decl_ok2 bound_ok2
+                         (Name: name1 = name2)
+                         (Decl: decl1 = decl2),
+  ({| fun_name := name1
+    ; fun_depth := depth
+    ; fun_depth_ok := depth_ok1
+    ; fun_decl := decl1
+    ; fun_decl_ok := decl_ok1
+    ; fun_bound_ok := bound_ok1 |}: fun_ctx cd' (S depth))
+   =
+  {| fun_name := name2
+   ; fun_depth := depth
+   ; fun_depth_ok := depth_ok2
+   ; fun_decl := decl2
+   ; fun_decl_ok := decl_ok2
+   ; fun_bound_ok := bound_ok2 |}).
+{
+  intros. subst.
+  assert (depth_ok1 = depth_ok2) by apply PropExtensionality.proof_irrelevance.
+  assert (decl_ok1 = decl_ok2) by apply PropExtensionality.proof_irrelevance.
+  assert (bound_ok1 = bound_ok2) by apply PropExtensionality.proof_irrelevance.
+  subst.
+  trivial.
+}
+apply FunCtxEq. { (* name: *) trivial. }
+clear FunCtxEq.
+assert (Unsome: forall {T} (x y: T), Some x = Some y -> x = y).
+{ intros T x y H. now inversion H. }
+apply Unsome.
+rewrite<- cached_mapped_decl_ok. cbn. symmetry. exact Ed'.
+Qed.

@@ -25,6 +25,7 @@ L10/Callset.v
 L10/Descend.v
 L10/Expr.v
 L10/Stmt.v
+L10/ToString.v
 L10/Interpret.v
 
 CheckedArith.v
@@ -57,6 +58,8 @@ From20To30/Callset.v
 From20To30/Expr.v
 From20To30/Stmt.v
 From20To30/Call.v
+
+Compile.v
 
 Extract.v
 

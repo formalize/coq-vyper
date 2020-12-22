@@ -1,3 +1,6 @@
 haskell/Lexer.hs: haskell/Lexer.x
 	alex --ghc haskell/Lexer.x
+haskell/Extracted.hs: Extract.vo
+haskell/PatchedExtracted.hs: haskell/Extracted.hs
+	sh haskell/patch-extracted.sh
 all: haskell/Lexer.hs
