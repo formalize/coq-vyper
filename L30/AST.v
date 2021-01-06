@@ -99,4 +99,7 @@ Definition string_of_decl (d: decl)
 := let newline := "
 " in newline ++ List.fold_right (fun x tail => x ++ newline ++ tail) "" (lines_of_decl d).
 
+Definition string_of_decls {C: VyperConfig} (l: list decl)
+:= List.fold_right append "" (List.map string_of_decl l).
+
 End AST.

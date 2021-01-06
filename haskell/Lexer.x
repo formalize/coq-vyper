@@ -38,6 +38,7 @@ $dec ("_" | $dec)*
 ")"   { \ p _ -> (p, Token.CloseParen) }
 ":"   { \ p _ -> (p, Token.Colon) }
 ","   { \ p _ -> (p, Token.Comma) }
+"."   { \ p _ -> (p, Token.Dot) }
 
 "+"   { \ p _ -> (p, Token.Plus) }
 "-"   { \ p _ -> (p, Token.Minus) }
@@ -58,6 +59,7 @@ $dec ("_" | $dec)*
 "*="  { \ p _ -> (p, Token.AssignMul) }
 "**=" { \ p _ -> (p, Token.AssignPow) }
 "//=" { \ p _ -> (p, Token.AssignIntDiv) }
+"%="  { \ p _ -> (p, Token.AssignMod) }
 "&="  { \ p _ -> (p, Token.AssignBitAnd) }
 "|="  { \ p _ -> (p, Token.AssignBitOr) }
 "^="  { \ p _ -> (p, Token.AssignBitXor) }

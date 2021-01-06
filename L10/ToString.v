@@ -141,3 +141,5 @@ Definition lines_of_decl {C: VyperConfig} (d: decl)
 Definition string_of_decl {C: VyperConfig} (d: decl)
 := newline ++ fold_right (fun x tail => x ++ newline ++ tail) "" (lines_of_decl d).
 
+Definition string_of_decls {C: VyperConfig} (l: list decl)
+:= fold_right append "" (map string_of_decl l).

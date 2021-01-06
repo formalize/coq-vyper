@@ -1,6 +1,15 @@
 haskell/Lexer.hs: haskell/Lexer.x
 	alex --ghc haskell/Lexer.x
+
+haskell/Parser.hs: haskell/Parser.y
+	happy --ghc haskell/Parser.y
+
 haskell/Extracted.hs: Extract.vo
+
 haskell/PatchedExtracted.hs: haskell/Extracted.hs
-	sh haskell/patch-extracted.sh
-all: haskell/Lexer.hs
+	sh haskell/patch_extracted.sh
+
+haskell/coq-vyperc: haskell/*.hs haskell/Lexer.hs haskell/Parser.hs haskell/PatchedExtracted.hs
+	(cd haskell && ghc coq-vyperc.hs)
+
+all: haskell/coq-vyperc

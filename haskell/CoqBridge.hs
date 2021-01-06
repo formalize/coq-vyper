@@ -1,7 +1,7 @@
 module CoqBridge where
 
 import Data.Bits
-import Extracted
+import PatchedExtracted
 
 posOfInteger :: Integer -> Positive
 posOfInteger 1 = XH

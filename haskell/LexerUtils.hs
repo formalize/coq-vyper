@@ -64,7 +64,9 @@ keywordMap = Data.Map.fromList [ ("and"     , Token.And)
                                , ("raise"   , Token.Raise)
                                , ("return"  , Token.Return)
                                , ("revert"  , Token.Return)
+                               , ("self"    , Token.Self)
                                , ("type"    , Token.Type)
+                               , ("uint256" , Token.UInt256)
                                , ("while"   , Token.While)
                                ]
 
@@ -108,8 +110,3 @@ processStringLiteral ('\"':rest) = process rest
                                     Just c -> c : process rest
                                     Nothing -> error $ "unknown escape char: " ++ [e]
           process (h:t) = h : process t
-
-----------------------------------------------------
--- indents
-
--- indent
