@@ -41,6 +41,23 @@ induction e using L20.AST.expr_ind'; intros; cbn in E; inversion E; cbn; trivial
   inversion E. subst. cbn. rr. now apply IH.
 }
 { (* BinOp *)
+  destruct (AST.binop_eq op AST.Pow) as [EQ|NE].
+  {
+    (* Pow *)
+    subst op.
+    destruct (try_const e1) as [(base, Ebase)|NEbase].
+    { (* base is const *)
+      assert (IH := IHe2 dst offset).
+      destruct translate_expr. { discriminate. }
+      inversion E. subst. cbn. rr. now apply IH.
+    }
+    destruct (try_const e2) as [(exp, Eexp)|NEexp]. 2:discriminate.
+    (* exp is const *)
+    assert (IH := IHe1 dst offset).
+    destruct translate_expr. { discriminate. }
+    inversion E. subst. cbn. rr. now apply IH.
+  }
+  (* not pow *)
   assert (IH1 := IHe1 dst offset).
   assert (IH2 := IHe2 offset (N.succ offset)).
   remember (translate_expr varmap dst offset e1) as e1'.

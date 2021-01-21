@@ -670,7 +670,7 @@ Definition uint256_pow {C: VyperConfig} (a b: uint256)
     for [base == 0]: [pow == 0]
     for [base == 1]: [pow; 1]
     for [base == 2]: [assert pow < 256; 1 << pow]
-    for [base >= 3]: [assert pow <= uint256_max_power base; base ** pow
+    for [base >= 3]: [assert pow <= uint256_max_power base; base ** pow]
  *)
 Definition uint256_checked_pow_const_base {C: VyperConfig} (base pow: uint256)
 : option uint256
@@ -834,22 +834,19 @@ apply Z.leb_gt in U. apply Z.leb_le in V.
 tauto.
 Qed.
 
-(** This is ugly but there's no extensionality requirement for uint256s,
-    so [base ** 1] is not exactly the same as [base]. *)
-Definition uint256_unary_plus {C: VyperConfig} (a: uint256)
-:= uint256_of_Z (Z_of_uint256 a).
-
 (** This is checked power with a constant exponent close to how it's compiled:
     for [pow == 0]: [base; 1]
-    for [pow == 1]: [+base]
+    for [pow == 1]: [base ** 1]
     for [pow >= 2]: [assert base <= uint256_max_base pow; base ** pow
+
+    Note that [base ** 1] cannot be replaced by base because it makes the value canonical.
  *)
 Definition uint256_checked_pow_const_exponent {C: VyperConfig} (base pow: uint256)
 : option uint256
 := let base_Z := Z_of_uint256 base in
    let pow_Z := Z_of_uint256 pow in
    if pow_Z =? 0 then Some one256 else
-   if pow_Z =? 1 then Some (uint256_unary_plus base) else
+   if pow_Z =? 1 then Some (uint256_pow base pow) else
    if base_Z <=? uint256_max_base pow_Z
      then Some (uint256_pow base pow)
      else None.
@@ -867,6 +864,7 @@ remember (Z_of_uint256 pow =? 0) as pow_0. symmetry in Heqpow_0. destruct pow_0.
 rewrite Z.eqb_neq in Heqpow_0.
 remember (Z_of_uint256 pow =? 1) as pow_1. symmetry in Heqpow_1. destruct pow_1.
 { (* base ^ 1 *)
+  unfold uint256_pow.
   rewrite Z.eqb_eq in Heqpow_1. rewrite Heqpow_1.
   rewrite Z.pow_1_r.
   assert (R := Z.mod_small _ _ (uint256_range base)).

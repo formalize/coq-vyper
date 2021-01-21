@@ -44,27 +44,37 @@ Definition interpret_small_stmt {C: VyperConfig}
                        | None => zero256
                        end),
              StmtSuccess)
-        | _ => (world, loc, StmtAbort (AbortError "undeclared global variable"))
+        | _ => (world, loc, stmt_error "undeclared global variable")
         end
    | StoragePut name src => fun _ =>
         match cd_declmap cd name with
         | Some (StorageVarDecl _) =>
            (storage_insert world name (OpenArray.get loc src), loc, StmtSuccess)
-        | _ => (world, loc, StmtAbort (AbortError "undeclared global variable"))
+        | _ => (world, loc, stmt_error "undeclared global variable")
         end
    | UnOp op dst src => fun _ =>
         match interpret_unop op (OpenArray.get loc src) with
         | ExprSuccess result => (world, OpenArray.put loc dst result, StmtSuccess)
         | ExprAbort ab => (world, loc, StmtAbort ab)
         end
-   | BinOp op dst src1 src2 => fun _ =>
+   | PowConstBase dst base exp => fun _ =>
+        match interpret_binop L10.AST.Pow base (OpenArray.get loc exp) with
+        | ExprSuccess result => (world, OpenArray.put loc dst result, StmtSuccess)
+        | ExprAbort ab => (world, loc, StmtAbort ab)
+        end
+   | PowConstExp dst base exp => fun _ =>
+        match interpret_binop L10.AST.Pow (OpenArray.get loc base) exp with
+        | ExprSuccess result => (world, OpenArray.put loc dst result, StmtSuccess)
+        | ExprAbort ab => (world, loc, StmtAbort ab)
+        end
+   | BinOp op dst src1 src2 _ => fun _ =>
         match interpret_binop op (OpenArray.get loc src1) (OpenArray.get loc src2) with
         | ExprSuccess result => (world, OpenArray.put loc dst result, StmtSuccess)
         | ExprAbort ab => (world, loc, StmtAbort ab)
         end
    | PrivateCall dst name args_offset args_count => fun E =>
         match fun_ctx_descend fc CallOk Ebound E with
-        | None => (world, loc, StmtAbort (AbortError "can't resolve function name"))
+        | None => (world, loc, stmt_error "can't resolve function name")
         | Some new_fc => let arg_values := OpenArray.view loc args_offset args_count in
                          let (world', call_result) := do_call new_fc world arg_values in
                          match call_result with
@@ -86,9 +96,9 @@ Definition interpret_small_stmt {C: VyperConfig}
                             (world', OpenArray.put loc dst result, StmtSuccess)
                          | ExprAbort ab => (world', loc, StmtAbort ab)
                          end
-                else fun _ => (world, loc, StmtAbort (AbortError "builtin with wrong arity")))
+                else fun _ => (world, loc, stmt_error "builtin with wrong arity"))
               eq_refl
-        | None => (world, loc, StmtAbort (AbortError "can't resolve function name"))
+        | None => (world, loc, stmt_error "can't resolve function name")
         end
    end eq_refl.
 
@@ -138,7 +148,7 @@ Fixpoint interpret_stmt {C: VyperConfig}
                                  (callset_descend_stmt_if_then E CallOk)
     | Loop var count body => fun E =>
         if (Z_of_uint256 count =? 0)%Z
-          then (world, loc, StmtAbort (AbortError "empty loop not allowed"))
+          then (world, loc, stmt_error "empty loop not allowed")
           else  let fix interpret_loop_rec (world: world_state)
                                            (loc: memory)
                                            (cursor: Z)
@@ -172,5 +182,5 @@ Fixpoint interpret_stmt {C: VyperConfig}
                        then interpret_loop_rec
                                      world loc start_z count_nat var
                                      (callset_descend_loop_body E CallOk)
-                       else (world, loc, StmtAbort (AbortError "loop range overflows"))
+                       else (world, loc, stmt_error "loop range overflows")
     end eq_refl.

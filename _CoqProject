@@ -1,12 +1,16 @@
 -R . Vyper
 
+Lib2/Logic2.v
+Lib2/Arith2.v
 Lib2/ListSet2.v
+Lib2/List2.v
 
 StringCmp.v
 FSet.v
 Map.v
 MapSig.v
 OpenArray.v
+Array.v
 
 Graph/Path.v
 Graph/Cycle.v
@@ -27,8 +31,6 @@ L10/Expr.v
 L10/Stmt.v
 L10/ToString.v
 L10/Interpret.v
-
-CheckedArith.v
 
 L20/AST.v
 L20/Callset.v
@@ -51,6 +53,7 @@ L30/Callset.v
 L30/Descend.v
 L30/Stmt.v
 L30/Interpret.v
+L30/VarCap.v
 
 From20To30/Translate.v
 From20To30/FunCtx.v
@@ -58,6 +61,19 @@ From20To30/Callset.v
 From20To30/Expr.v
 From20To30/Stmt.v
 From20To30/Call.v
+
+CheckArith/CheckedArith.v
+CheckArith/Builtins.v
+CheckArith/Translate.v
+
+
+Hash/UInt63.v
+Hash/UInt64.v
+Hash/Nibble.v
+Hash/Tuplevector.v
+Hash/Keccak.v
+
+# L40/AST.v
 
 Compile.v
 

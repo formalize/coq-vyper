@@ -4,7 +4,7 @@ haskell/Lexer.hs: haskell/Lexer.x
 haskell/Parser.hs: haskell/Parser.y
 	happy --ghc haskell/Parser.y
 
-haskell/Extracted.hs: Extract.vo
+haskell/Extracted.hs: Extract.vo Extract.vos Extract.glob
 
 haskell/PatchedExtracted.hs: haskell/Extracted.hs
 	sh haskell/patch_extracted.sh

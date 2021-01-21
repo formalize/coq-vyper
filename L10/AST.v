@@ -32,6 +32,10 @@ Inductive binop
  | Mod
  | Pow.
 
+Definition binop_eq (a b: binop)
+: {a = b} + {a <> b}.
+Proof. decide equality. Defined.
+
 (** I cannot make the extractor reliably prioritize [binop] over [comparison],
     resulting in ugly names like [Lt0] for my binops. Here's a workaround that
     is still ugly but not as much as [Lt0].

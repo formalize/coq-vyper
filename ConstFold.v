@@ -255,7 +255,7 @@ Qed.
 
 
 Definition sum_map {C: VyperConfig} {Err A B} (f: A -> B) (e: Err + A)
-: Err +  B
+: Err + B
 := match e with
    | inl err => inl err
    | inr a => inr (f a)
@@ -401,7 +401,7 @@ Definition const_fold_fun_ctx {C: VyperConfig}
           {cd cd': calldag}
           (Ok: const_fold_calldag cd = inr cd')
 : fun_ctx cd bound -> fun_ctx cd' bound
-:= fun_ctx_map const_fold_decl (@callset_const_fold_decl C) Ok.
+:= fun_ctx_maybe_map const_fold_decl (@callset_const_fold_decl C) Ok.
 
 (*************************************************************************************)
 
@@ -758,7 +758,7 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     interpret_expr_list (world0 : world_state) (loc0 : string_map uint256) 
                         (e : list expr)
                         (CallOk0 : FSet.is_subset (expr_list_callset e)
-                                     (decl_callset (cached_mapped_decl const_fold_decl
+                                     (decl_callset (cached_maybe_mapped_decl const_fold_decl
                                            (@callset_const_fold_decl C) ok fc)) = true) {struct
                         e} : world_state * Base.expr_result (list uint256) :=
       match e as e' return (e = e' -> world_state * Base.expr_result (list uint256)) with
@@ -787,13 +787,13 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     assert (Irrel:
         (@callset_descend_head C a args' (a :: args')
           (@decl_callset C
-             (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+             (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                 (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                 (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
          =
         (@callset_descend_head C a args' (a :: args')
         (@decl_callset C
-           (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+           (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
               (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
               (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
     { apply PropExtensionality.proof_irrelevance. }
@@ -802,12 +802,12 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     now rewrite (IHargs' w loc 
                   (@callset_descend_tail C a args' (a :: args')
                     (@decl_callset C
-                       (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                       (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                           (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                           (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
                   (@callset_descend_tail C a args' (a :: args')
                     (@decl_callset C
-                       (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                       (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                           (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                           (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok) ).
   }
@@ -940,7 +940,7 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
     {
       intros. subst. unfold const_fold_fun_ctx. cbn.
       f_equal.
-      assert (D: d2 = cached_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok
+      assert (D: d2 = cached_maybe_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok
               {|
               fun_name := name;
               fun_depth := depth;
@@ -949,13 +949,14 @@ revert e' ExprOk CallOk CallOk' world loc. induction e using expr_ind'; intros;
               fun_decl_ok := Edecl1;
               fun_bound_ok := Descend.call_descend' fc CallOk eq_refl eq_refl Edecl1 Edepth1 |}).
       {
-        unfold cached_mapped_decl. cbn.
+        unfold cached_maybe_mapped_decl. cbn.
         remember (Calldag.calldag_maybe_map_fun_ctx_fun_decl_helper _ _ ok _) as Bad. clear HeqBad.
         cbn in Bad. revert Bad.
         destruct (cd_declmap cd' name). { now inversion Edecl2. }
         intro Bad. discriminate.
       }
-      subst. unfold fun_ctx_map. cbn. f_equal; apply PropExtensionality.proof_irrelevance.
+      subst. unfold fun_ctx_maybe_map. cbn.
+      f_equal; apply PropExtensionality.proof_irrelevance.
     } (* SomeBranchOk *)
     clear Heqsome_branch_l Heqsome_branch_r
           CallOk CallOk' Edecl1 Edecl2 d1 d2 args value DoCallOk
@@ -1032,7 +1033,7 @@ assert (R':
   interpret_expr_list (world0 : world_state) (loc0 : string_map uint256) 
                       (e : list expr)
                       (CallOk0 : FSet.is_subset (expr_list_callset e)
-                                   (decl_callset (cached_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok fc)) = true) {struct
+                                   (decl_callset (cached_maybe_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok fc)) = true) {struct
                       e} : world_state * Base.expr_result (list uint256) :=
     match e as e' return (e = e' -> world_state * Base.expr_result (list uint256)) with
     | nil => fun _ : e = nil => (world0, Base.ExprSuccess nil)
@@ -1060,13 +1061,13 @@ assert (R':
   assert (Irrel:
         (@callset_descend_head C a args' (a :: args')
         (@decl_callset C
-           (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+           (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
               (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
               (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
        =
          (@callset_descend_head C a args' (a :: args')
         (@decl_callset C
-           (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+           (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
               (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
               (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
   { apply PropExtensionality.proof_irrelevance. }
@@ -1075,12 +1076,12 @@ assert (R':
   now rewrite (IHargs' w loc 
                 (@callset_descend_tail C a args' (a :: args')
                   (@decl_callset C
-                     (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                     (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                         (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                         (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok')
                 (@callset_descend_tail C a args' (a :: args')
                   (@decl_callset C
-                     (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                     (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                         (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                         (S smaller_call_depth_bound) fc)) (@eq_refl (list (@expr C)) (a :: args')%list) Ok)).
 }
@@ -1192,7 +1193,7 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
   (* prepare for the next rewrite *)
   assert (R: (@callset_descend_return C (@Return C e) e
                 (@decl_callset C
-                   (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                   (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                       (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                       bigger_call_depth_bound fc)) (@eq_refl (@small_stmt C) (@Return C e)) CallOk')
               =
@@ -1215,7 +1216,7 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
   cbn.
   assert (R: (@callset_descend_raise C (@Raise C e) e
               (@decl_callset C
-                 (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                 (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                     (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                     bigger_call_depth_bound fc)) (@eq_refl (@small_stmt C) (@Raise C e)) CallOk')
               =
@@ -1238,7 +1239,7 @@ destruct ss; cbn in StmtOk; unfold sum_map in *; cbn.
   cbn.
   assert (R: (@callset_descend_assign_rhs C (@Assign C lhs e) lhs e
                 (@decl_callset C
-                   (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                   (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                       (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                       bigger_call_depth_bound fc)) (@eq_refl (@small_stmt C) (@Assign C lhs e)) CallOk')
               =
@@ -1341,7 +1342,7 @@ induction s; intros; cbn in StmtOk; unfold sum_map in *; unfold sum_ap in *.
                     (callset_descend_var_scope eq_refl CallOk)).
   assert (R: (@callset_descend_var_scope C (@LocalVarDecl C name init' body) name init' body
                (@decl_callset C
-                  (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                  (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                      (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                      bigger_call_depth_bound fc)) (@eq_refl (@stmt C) (@LocalVarDecl C name init' body))
                CallOk')
@@ -1489,14 +1490,14 @@ assert (IH := IHcountdown count' world''' loc''' (Z.succ cursor)
 assert (FixCallL:
          (@callset_descend_loop_body C (@Loop C var start' count' body') body' var start' count'
             (@decl_callset C
-               (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+               (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                   (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                   bigger_call_depth_bound fc)) (@eq_refl (@stmt C) (@Loop C var start' count' body'))
             CallOk') 
         =
          (@callset_descend_loop_body C (@Loop C var start' count body') body' var start' count
             (@decl_callset C
-               (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+               (@cached_maybe_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
                   (@decl_callset C) (@const_fold_decl C) (@callset_const_fold_decl C) cd cd' ok
                   bigger_call_depth_bound fc)) (@eq_refl (@stmt C) (@Loop C var start' count body'))
             CallOk'))
@@ -1535,13 +1536,13 @@ Lemma interpret_const_fold_call {C: VyperConfig}
 Proof.
 revert world arg_values. induction call_depth_bound.
 { exfalso. exact (Nat.nlt_0_r _ (proj1 (Nat.ltb_lt _ _) (fun_bound_ok fc))). }
-assert(F: inr (cached_mapped_decl const_fold_decl _ ok fc)
+assert(F: inr (cached_maybe_mapped_decl const_fold_decl _ ok fc)
            =
           const_fold_decl (fun_decl fc)).
 {
   clear IHcall_depth_bound.
   unfold const_fold_fun_ctx in *. cbn in *.
-  unfold cached_mapped_decl in *.
+  unfold cached_maybe_mapped_decl in *.
   remember (Calldag.calldag_maybe_map_fun_ctx_fun_decl_helper const_fold_decl _ ok fc) as foo.
   clear Heqfoo.
   remember (cd_declmap cd' (fun_name fc)) as d.
@@ -1560,7 +1561,7 @@ assert(F: inr (cached_mapped_decl const_fold_decl _ ok fc)
 intros.
 cbn.
 remember (fun name arg_names body
-              (E : cached_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok fc = FunDecl name arg_names body) =>
+              (E : cached_maybe_mapped_decl const_fold_decl (@callset_const_fold_decl C) ok fc = FunDecl name arg_names body) =>
     match Interpret.bind_args arg_names arg_values with
     | inl err => (world, Base.expr_error err)
     | inr loc =>
@@ -1597,7 +1598,7 @@ enough (B: forall name arg_names body_l body_r E_l E_r,
              branch_r name arg_names body_r E_r).
 {
   clear Heqbranch_l Heqbranch_r.
-  destruct (fun_decl fc); cbn in F; destruct cached_mapped_decl;
+  destruct (fun_decl fc); cbn in F; destruct cached_maybe_mapped_decl;
     unfold sum_map in *; try destruct (const_fold_stmt body); try easy.
   inversion F; subst.
   apply B.

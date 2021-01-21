@@ -1,7 +1,7 @@
 {
 module Parser where
 
-import PatchedExtracted hiding (map, div)
+import PatchedExtracted hiding (map, div, Int)
 import qualified Token
 import CoqBridge (zOfInteger)
 import qualified Data.Text
@@ -105,7 +105,7 @@ Power : Primary "**" Factor { \c -> BinOp Pow ($1 c) ($3 c) }
       | Primary             { $1 }
 
 Factor -- '+' Factor                      { \c }
-       : '-' Factor                      { \c -> UnOp Neg ($2 c) }
+       : '-' Factor                      { \c -> UnOp l10_neg ($2 c) }
        | '~' Factor                      { \c -> UnOp BitwiseNot ($2 c) }
        | Power                           { $1 }
 

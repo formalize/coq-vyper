@@ -578,6 +578,70 @@ induction e20 using L20.AST.expr_ind'; intros; cbn in ExprOk.
   apply OpenArray.put_same.
 }
 { (* BinOp *)
+  destruct (L10.AST.binop_eq op L10.AST.Pow) as [EQpow|NEpow].
+  { (* Pow *)
+    subst op.
+    destruct (try_const e20_1) as [(base, Ebase) | (_, NEbase)].
+    {
+      (* const base *)
+      (* this is basically the same as unop. *)
+      subst e20_1.
+      remember (translate_expr varmap dst offset e20_2) as t_2.
+      destruct t_2. { discriminate. }
+      inversion ExprOk. subst s30. cbn. clear ExprOk.
+      assert (IH := IHe20_2 (L20.Callset.callset_descend_binop_right eq_refl CallOk20) 
+                      world locmem dst offset Agree Bound OffsetOk s0 (eq_sym Heqt_2)
+                      (L30.Callset.callset_descend_semicolon_left eq_refl CallOk30)).
+      cbn in IH.
+      destruct L30.Stmt.interpret_stmt as ((world30, mem30), result30).
+      destruct L20.Expr.interpret_expr as (world20, result20).
+      destruct result20, result30; try destruct IH as (I_world, (I_agree, (I_result, I_dst)));
+        try easy.
+      (* both computations are successful *)
+      subst value.
+      destruct interpret_binop. 2:tauto.
+      split. { assumption. }
+      split.
+      {
+        unfold mem_agree in *. intros n L NE.
+        rewrite OpenArray.put_ok.
+        assert (A := I_agree n L NE).
+        enough (F: (dst =? n)%N = false) by now rewrite F.
+        apply N.eqb_neq. intro E. symmetry in E. tauto.
+      }
+      split. { assumption. }
+      apply OpenArray.put_same.
+    }
+    destruct (try_const e20_2) as [(exp, Eexp) | (_, NEexp)]. 2:discriminate.
+    (* const exp *)
+    subst e20_2.
+    remember (translate_expr varmap dst offset e20_1) as t_1.
+    destruct t_1. { discriminate. }
+    inversion ExprOk. subst s30. cbn. clear ExprOk.
+    assert (IH := IHe20_1 (L20.Callset.callset_descend_binop_left eq_refl CallOk20) 
+                    world locmem dst offset Agree Bound OffsetOk s0 (eq_sym Heqt_1)
+                    (L30.Callset.callset_descend_semicolon_left eq_refl CallOk30)).
+    cbn in IH.
+    destruct L30.Stmt.interpret_stmt as ((world30, mem30), result30).
+    destruct L20.Expr.interpret_expr as (world20, result20).
+    destruct result20, result30; try destruct IH as (I_world, (I_agree, (I_result, I_dst)));
+      try easy.
+    (* both computations are successful *)
+    subst value.
+    destruct interpret_binop. 2:tauto.
+    split. { assumption. }
+    split.
+    {
+      unfold mem_agree in *. intros n L NE.
+      rewrite OpenArray.put_ok.
+      assert (A := I_agree n L NE).
+      enough (F: (dst =? n)%N = false) by now rewrite F.
+      apply N.eqb_neq. intro E. symmetry in E. tauto.
+    }
+    split. { assumption. }
+    apply OpenArray.put_same.
+  }
+  (* not pow *)
   remember (translate_expr varmap dst offset e20_1) as t_1.
   destruct t_1. { discriminate. }
   remember (translate_expr varmap offset (N.succ offset) e20_2) as t_2. 

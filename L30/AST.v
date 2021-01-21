@@ -1,4 +1,4 @@
-From Coq Require Import String NArith DecimalString HexString.
+From Coq Require Import String NArith ZArith DecimalString HexString.
 
 From Vyper Require Import Config FSet.
 From Vyper.L10 Require AST Base ToString.
@@ -14,7 +14,9 @@ Inductive small_stmt
  | StorageGet (dst: N) (name: string)
  | StoragePut (name: string) (src: N)
  | UnOp (op: L10.AST.unop) (dst src: N)
- | BinOp (op: L10.AST.binop) (dst src1 src2: N)
+ | PowConstBase (dst: N) (base: uint256) (exp: N)
+ | PowConstExp (dst base: N) (exp: uint256)
+ | BinOp (op: L10.AST.binop) (dst src1 src2: N) (Ok: op <> L10.AST.Pow)
  | PrivateCall (dst: N) (name: string) (args_offset args_count: N)
  | BuiltinCall (dst: N) (name: string) (args_offset args_count: N)
  | Abort (ab: L10.Base.abort)
@@ -38,38 +40,45 @@ Local Open Scope string_scope.
 Definition string_of_small_stmt (ss: small_stmt)
 := match ss with
    | Pass => "pass"
-   | Const dst val => "[" ++ NilZero.string_of_uint (N.to_uint dst) ++ "]"
-                      ++ " <- "
+   | Const dst val => "var" ++ NilZero.string_of_uint (N.to_uint dst)
+                      ++ " = "
                       ++ HexString.of_Z (Z_of_uint256 val)
-   | Copy dst src => "[" ++ NilZero.string_of_uint (N.to_uint dst) ++ "]"
-                     ++ " <- ["
+   | Copy dst src => "var" ++ NilZero.string_of_uint (N.to_uint dst)
+                     ++ " = var"
                      ++ NilZero.string_of_uint (N.to_uint src)
-                     ++ "]"
-   | StorageGet dst name => "[" ++ NilZero.string_of_uint (N.to_uint dst)
-                            ++ "] <- storage_get " ++ name
-   | StoragePut name src => "storage_put " ++ name
-                            ++ " [" ++ NilZero.string_of_uint (N.to_uint src) ++ "]"
-   | UnOp op dst src => "[" ++ NilZero.string_of_uint (N.to_uint dst)
-                        ++ "] <- "
+   | StorageGet dst name => "var" ++ NilZero.string_of_uint (N.to_uint dst)
+                            ++ " = storage_get(" ++ name ++ ")"
+   | StoragePut name src => "storage_put(" ++ name
+                            ++ ", var" ++ NilZero.string_of_uint (N.to_uint src) ++ ")"
+   | UnOp op dst src => "var" ++ NilZero.string_of_uint (N.to_uint dst)
+                        ++ " = "
                         ++ L10.ToString.string_of_unop op
-                        ++ "[" ++ NilZero.string_of_uint (N.to_uint src) ++ "]"
-   | BinOp op dst src1 src2 => "[" ++ NilZero.string_of_uint (N.to_uint dst)
-                               ++ "] <- [" ++ NilZero.string_of_uint (N.to_uint src1) ++ "]"
-                               ++ L10.ToString.string_of_binop op
-                               ++ "[" ++ NilZero.string_of_uint (N.to_uint src2) ++ "]"
+                        ++ " var" ++ NilZero.string_of_uint (N.to_uint src)
+   | PowConstBase dst base exp => 
+      "var" ++ NilZero.string_of_uint (N.to_uint dst) ++ " = "
+       ++ NilZero.string_of_int (Z.to_int (Z_of_uint256 base))
+       ++ " ** var" ++ NilZero.string_of_uint (N.to_uint exp)
+   | PowConstExp dst base exp => 
+      "var" ++ NilZero.string_of_uint (N.to_uint dst)
+       ++ " = var" ++ NilZero.string_of_uint (N.to_uint base)
+       ++ " ** " ++ NilZero.string_of_int (Z.to_int (Z_of_uint256 exp))
+   | BinOp op dst src1 src2 _ => "var" ++ NilZero.string_of_uint (N.to_uint dst)
+                                 ++ " = var" ++ NilZero.string_of_uint (N.to_uint src1) ++ " "
+                                 ++ L10.ToString.string_of_binop op
+                                 ++ " var" ++ NilZero.string_of_uint (N.to_uint src2)
    | PrivateCall dst name args_offset args_count =>
-       "[" ++ NilZero.string_of_uint (N.to_uint dst)
-        ++ "] <- " ++ name ++ "/"
+       "var" ++ NilZero.string_of_uint (N.to_uint dst)
+        ++ " = " ++ name ++ "/"
         ++ NilZero.string_of_uint (N.to_uint args_count)
-        ++ "[" ++ NilZero.string_of_uint (N.to_uint args_offset) ++ "...]"
+        ++ "(var" ++ NilZero.string_of_uint (N.to_uint args_offset) ++ ", ...)"
    | BuiltinCall dst name args_offset args_count =>
-       "[" ++ NilZero.string_of_uint (N.to_uint dst)
-        ++ "] <- builtin " ++ name ++ "/"
+       "var" ++ NilZero.string_of_uint (N.to_uint dst)
+        ++ " = $" ++ name ++ "/"
         ++ NilZero.string_of_uint (N.to_uint args_count)
-        ++ "[" ++ NilZero.string_of_uint (N.to_uint args_offset) ++ "...]"
+        ++ "(var" ++ NilZero.string_of_uint (N.to_uint args_offset) ++ ", ...)"
    | Abort a => "abort " ++ L10.Base.string_of_abort a
-   | Return n => "return [" ++ NilZero.string_of_uint (N.to_uint n) ++ "]"
-   | Raise n => "raise [" ++ NilZero.string_of_uint (N.to_uint n) ++ "]"
+   | Return n => "return var" ++ NilZero.string_of_uint (N.to_uint n)
+   | Raise n => "raise var" ++ NilZero.string_of_uint (N.to_uint n)
    end.
 
 
@@ -77,10 +86,10 @@ Fixpoint lines_of_stmt (s: stmt)
 : list string
 :=  match s with
     | SmallStmt ss => string_of_small_stmt ss :: nil
-    | IfElseStmt cond yes no => ("if [" ++ NilZero.string_of_uint (N.to_uint cond) ++ "]:")
+    | IfElseStmt cond yes no => ("if var" ++ NilZero.string_of_uint (N.to_uint cond) ++ ":")
                                 :: L10.ToString.add_indent (lines_of_stmt yes)
                                 ++ "else:" :: L10.ToString.add_indent (lines_of_stmt no)
-    | Loop var count body =>  ("for [" ++ NilZero.string_of_uint (N.to_uint var) ++ "] in count("
+    | Loop var count body =>  ("for var" ++ NilZero.string_of_uint (N.to_uint var) ++ " in count("
                                        ++ HexString.of_Z (Z_of_uint256 count) ++ "):")
                                        :: L10.ToString.add_indent (lines_of_stmt body)
     | Semicolon a b => lines_of_stmt a ++ lines_of_stmt b

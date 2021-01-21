@@ -23,3 +23,38 @@ Definition nary_call' {T n R} (f: nary_fun T n R) (l: list T) (ok: n <=? length 
 Local Example nary_call_example_pow:
   nary_call' (Nat.pow: nary_fun nat 2 nat) (2 :: 3 :: 5 :: nil)%list eq_refl = (8, 5 :: nil)%list.
 Proof. trivial. Qed.
+
+(** Examples of calling a [nary_fun] when the argument count is known in advance: *)
+
+Definition nary_call_0 {T n R} (f: nary_fun T n R) (E: n = 0)
+: R
+:= eq_rect n (fun x => nary_fun T x R) f 0 E.
+
+Definition nary_call_1 {T n R} (f: nary_fun T n R) (E: n = 1)
+: T -> R
+:= eq_rect n (fun x => nary_fun T x R) f 1 E.
+
+Definition nary_call_2 {T n R} (f: nary_fun T n R) (E: n = 2)
+: T -> T -> R
+:= eq_rect n (fun x => nary_fun T x R) f 2 E.
+
+Lemma nary_call_0_ok {T n R} (f: nary_fun T n R) (E: n = 0) (l: list T)
+                     (Ok: n <= length l):
+  nary_call f l Ok = (nary_call_0 f E, l).
+Proof.
+now subst.
+Qed.
+
+Lemma nary_call_1_ok {T n R} (f: nary_fun T n R) (E: n = 1) (l: list T) (a: T)
+                     (Ok: n <= S (length l)):
+  nary_call f (a :: l) Ok = (nary_call_1 f E a, l).
+Proof.
+now subst.
+Qed.
+
+Lemma nary_call_2_ok {T n R} (f: nary_fun T n R) (E: n = 2) (l: list T) (a b: T)
+                     (Ok: n <= S (S (length l))):
+  nary_call f (a :: b :: l) Ok = (nary_call_2 f E a b, l).
+Proof.
+now subst.
+Qed.

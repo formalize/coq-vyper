@@ -6,6 +6,15 @@ From Vyper Require L20.AST L30.AST.
 
 Local Open Scope string_scope.
 
+Program Definition try_const {C: VyperConfig} (e: L20.AST.expr)
+: ({ value | e = L20.AST.Const value })
+   +
+  ({ _: unit | forall value, e <> L20.AST.Const value })
+:= match e with
+   | L20.AST.Const value => inl (exist _ value _)
+   | _ => inr (exist _ tt _)
+   end.
+
 Fixpoint translate_expr {C: VyperConfig} (varmap: string_map N)
                         (dst: N)
                         (offset: N)
@@ -46,16 +55,40 @@ Fixpoint translate_expr {C: VyperConfig} (varmap: string_map N)
                  (L30.AST.SmallStmt (L30.AST.UnOp op dst dst)))
        end
    | L20.AST.BinOp op a b =>
-       (* dst = a; tmp = b; dst = tmp1 op tmp2 *)
-       match translate_expr varmap dst offset a,
-             translate_expr varmap offset (N.succ offset)%N b
-       with
-       | inl err, _ | _, inl err => inl err
-       | inr a', inr b' =>
-           inr (L30.AST.Semicolon
-                 (L30.AST.Semicolon a' b')
-                 (L30.AST.SmallStmt (L30.AST.BinOp op dst dst offset)))
-       end
+       match L10.AST.binop_eq op L10.AST.Pow with
+       | left _ =>
+           match try_const a with
+           | inl (exist _ base Ebase) =>
+               match translate_expr varmap dst offset b with
+               | inl err => inl err
+               | inr b' =>
+                  inr (L30.AST.Semicolon b'
+                        (L30.AST.SmallStmt (L30.AST.PowConstBase dst base dst)))
+               end
+           | inr NEbase =>
+               match try_const b with
+               | inl (exist _ exp Eexp) =>
+                 match translate_expr varmap dst offset a with
+                 | inl err => inl err
+                 | inr a' =>
+                    inr (L30.AST.Semicolon a'
+                          (L30.AST.SmallStmt (L30.AST.PowConstExp dst dst exp)))
+                 end
+               | inr NEexp => inl "at least one side of '**' must be constant"
+               end
+           end
+       | right NE =>
+         (* dst = a; tmp = b; dst = tmp1 op tmp2 *)
+         match translate_expr varmap dst offset a,
+               translate_expr varmap offset (N.succ offset)%N b
+         with
+         | inl err, _ | _, inl err => inl err
+         | inr a', inr b' =>
+             inr (L30.AST.Semicolon
+                   (L30.AST.Semicolon a' b')
+                   (L30.AST.SmallStmt (L30.AST.BinOp op dst dst offset NE)))
+         end
+      end
    | L20.AST.PrivateCall name args =>
        match translate_expr_list varmap offset args with
        | inl err => inl err

@@ -448,7 +448,7 @@ pose (interpret_stmt_list' := fix
         then
          fun Evar : AST.is_local_var_decl h = true =>
          match map_lookup loc0 (fst (AST.var_decl_unpack h Evar)) with
-         | Some _ => (world0, loc0, StmtAbort (AbortError "local variable already exists"))
+         | Some _ => (world0, loc0, stmt_error "local variable already exists")
          | None =>
              match
                snd (AST.var_decl_unpack h Evar) as init'

@@ -23,13 +23,13 @@ Definition do_assign {return_type: Type}
        match lhs with
        | L10.AST.AssignableLocalVar name =>
            match Map.lookup loc name with
-           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | None => (world, loc, stmt_error "undeclared local variable")
            | Some _ => (world, Map.insert loc name a, StmtSuccess)
            end
        | L10.AST.AssignableStorageVar name =>
            if storage_var_is_declared cd name
              then (storage_insert world name a, loc, StmtSuccess)
-             else (world, loc, StmtAbort (AbortError "undeclared global variable"))
+             else (world, loc, stmt_error "undeclared global variable")
        end
    end.
 
@@ -122,7 +122,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                                     (callset_descend_small_stmt E CallOk)
     | LocalVarDecl name init scope => fun E =>
          match map_lookup loc name with
-         | Some _ => (world, loc, StmtAbort (AbortError "local variable already exists"))
+         | Some _ => (world, loc, stmt_error "local variable already exists")
          | None =>
            let '(world', result) :=
                   interpret_expr Ebound fc do_call builtins
@@ -157,10 +157,10 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
            end
     | Loop var start count fc_body => fun E =>
         match map_lookup loc var with
-        | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
+        | Some _ => (world, loc, stmt_error "loop var already exists")
         | None =>
             if (Z_of_uint256 count =? 0)%Z
-              then (world, loc, StmtAbort (AbortError "empty loop not allowed"))
+              then (world, loc, stmt_error "empty loop not allowed")
               else
                 let (world', result_start) :=
                       interpret_expr Ebound fc do_call builtins
@@ -204,7 +204,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                            world' loc start_z count_nat var
                                            (callset_descend_loop_body E CallOk)
                                   in (world'', map_remove loc' var, result')
-                             else (world', loc, StmtAbort (AbortError "loop range overflows"))
+                             else (world', loc, stmt_error "loop range overflows")
                    end
         end
     end eq_refl.

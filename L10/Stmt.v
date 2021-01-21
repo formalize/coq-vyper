@@ -25,13 +25,13 @@ Definition do_assign {return_type: Type}
        match lhs with
        | AssignableLocalVar name =>
            match Map.lookup loc name with
-           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | None => (world, loc, stmt_error "undeclared local variable")
            | Some _ => (world, Map.insert loc name a, StmtSuccess)
            end
        | AssignableStorageVar name =>
            if storage_var_is_declared cd name
              then (storage_insert world name a, loc, StmtSuccess)
-             else (world, loc, StmtAbort (AbortError "undeclared global variable"))
+             else (world, loc, stmt_error "undeclared global variable")
        end
    end.
 
@@ -135,7 +135,7 @@ Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_boun
        in match lhs with
        | AssignableLocalVar name =>
            match Map.lookup loc name with
-           | None => (world, loc, StmtAbort (AbortError "undeclared local variable"))
+           | None => (world, loc, stmt_error "undeclared local variable")
            | Some old_val =>
                compute_rhs old_val
                  (fun new_world new_val => (new_world, Map.insert loc name new_val, StmtSuccess))
@@ -148,7 +148,7 @@ Definition interpret_small_stmt {bigger_call_depth_bound smaller_call_depth_boun
                     | Some old_val => old_val
                     end)
                     (fun new_world new_val => (storage_insert new_world name new_val, loc, StmtSuccess))
-             else (world, loc, StmtAbort (AbortError "undeclared global variable"))
+             else (world, loc, stmt_error "undeclared global variable")
        end
    | ExprStmt e => fun E =>
                    let (world', result) := 
@@ -206,7 +206,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                    let name := fst name_init in
                    let init := snd name_init in
                    match map_lookup loc name with
-                   | Some _ => (world, loc, StmtAbort (AbortError "local variable already exists"))
+                   | Some _ => (world, loc, stmt_error "local variable already exists")
                    | None =>
                        match init as init' return init = init' -> _ with
                        | None => fun _ =>
@@ -292,12 +292,12 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                        end
      in let stop_z := Z_of_uint256 stop in
      match map_lookup loc var with
-     | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
+     | Some _ => (world, loc, stmt_error "loop var already exists")
      | None => if (stop_z <=? start_z)%Z
                  then (* ... with STOP being a greater value than START ...
                          https://vyper.readthedocs.io/en/stable/control-structures.html#for-loops
                       *)
-                      (world, loc, StmtAbort (AbortError "empty loop not allowed"))
+                      (world, loc, stmt_error "empty loop not allowed")
                  else let '(world', loc', result) :=
                              interpret_loop_rec world loc start_z
                                                 (Z.to_nat (stop_z - start_z)%Z)
@@ -326,10 +326,10 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                       end
              end
       in match map_lookup loc var with
-         | Some _ => (world, loc, StmtAbort (AbortError "loop var already exists"))
+         | Some _ => (world, loc, stmt_error "loop var already exists")
          | None =>
             if (Z_of_uint256 count =? 0)%Z
-              then (world, loc, StmtAbort (AbortError "empty loop not allowed"))
+              then (world, loc, stmt_error "empty loop not allowed")
               else let (world', result_start) :=
                           interpret_expr Ebound fc do_call builtins
                                          world loc start
@@ -347,7 +347,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                              interpret_loop_rec
                                world' loc start_z count_nat
                            in (world'', map_remove loc' var, result)
-                         else (world', loc, StmtAbort (AbortError "loop range overflows"))
+                         else (world', loc, stmt_error "loop range overflows")
                    end
              end
   end eq_refl.
@@ -379,7 +379,7 @@ Fixpoint interpret_stmt_list {bigger_call_depth_bound smaller_call_depth_bound: 
            let name := fst name_init in
            let init := snd name_init in
            match map_lookup loc name with
-           | Some _ => (world, loc, StmtAbort (AbortError "local variable already exists"))
+           | Some _ => (world, loc, stmt_error "local variable already exists")
            | None =>
                match init as init' return init = init' -> _ with
                | None => fun _ =>

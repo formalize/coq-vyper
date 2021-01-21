@@ -1,10 +1,23 @@
-From Coq Require Import String Arith HexString.
+From Coq Require Import String Arith ZArith HexString.
 From Vyper Require Import Config L10.AST NaryFun.
 From Vyper Require UInt256.
 
+Definition Z_of_string (s: string)
+:= Z.of_N
+     (List.fold_left (fun x y => N.lor (N.shiftl x 8) y)
+       (List.map Ascii.N_of_ascii (list_ascii_of_string s))
+       0%N).
+
+Example hex_arithmetic_error:
+  HexString.of_Z (Z_of_string "arithmetic error") = "0x61726974686d65746963206572726f72"%string.
+Proof.                                             (*  a r i t h m e t i c   e r r o r *)
+trivial.
+Qed.
+
+
+(* 210119: removed AbortError because the compiled code has to reproduce it with pure uint256s *)
 Inductive abort {C: VyperConfig}
-:= AbortError (msg: string)
- | AbortException (data: uint256)
+:= AbortException (data: uint256)
  | AbortBreak
  | AbortContinue
  | AbortReturnFromContract
@@ -12,7 +25,6 @@ Inductive abort {C: VyperConfig}
 
 Fixpoint string_of_abort {C: VyperConfig} (a: abort)
 := (match a with
-    | AbortError err => "error(" ++ err ++ ")"
     | AbortException n => "exception(" ++ HexString.of_Z (Z_of_uint256 n) ++ ")"
     | AbortBreak => "break"
     | AbortContinue => "continue"
@@ -39,7 +51,11 @@ Section Base.
 Context {C: VyperConfig}.
 
 
-Definition expr_error {type: Type} (msg: string) := @ExprAbort C type (AbortError msg).
+Definition expr_error {type: Type} (msg: string) 
+:= @ExprAbort C type (AbortException (uint256_of_Z (Z_of_string msg))).
+
+Definition stmt_error {type: Type} (msg: string) 
+:= @StmtAbort C type (AbortException (uint256_of_Z (Z_of_string msg))).
 
 (*************************************************************************************************)
 
