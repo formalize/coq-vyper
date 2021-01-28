@@ -661,6 +661,7 @@ rewrite Z.leb_gt in B. rewrite Z.leb_le in B.
 apply B.
 Qed.
 
+
 (** Unchecked power modulo [2^256]. *)
 Definition uint256_pow {C: VyperConfig} (a b: uint256)
 : uint256
@@ -902,4 +903,51 @@ split. 2:lia.
 enough (0 <= uint256_max_base (Z_of_uint256 pow)) by lia.
 unfold uint256_max_base.
 apply binary_search_lower.
+Qed.
+
+(********************************************************************************************)
+(* Here are the rewrites of comparison ops into expressions with lt, eq and iszero: *)
+
+(* There is in fact a GT instruction in the EVM. However we're not using it. *)
+Lemma uint256_gt_ok {C: VyperConfig} (a b: uint256):
+  uint256_gt a b = uint256_lt b a.
+Proof.
+unfold uint256_gt.
+unfold uint256_lt.
+now rewrite Z.gtb_ltb.
+Qed.
+
+Lemma uint256_le_ok {C: VyperConfig} (a b: uint256):
+  uint256_le a b = uint256_iszero (uint256_lt b a).
+Proof.
+unfold uint256_le.
+unfold uint256_lt.
+unfold uint256_iszero.
+rewrite Z.leb_antisym.
+rewrite Bool.if_negb.
+unfold one256. unfold zero256.
+destruct (Z_of_uint256 b <? Z_of_uint256 a); now rewrite uint256_ok.
+Qed.
+
+Lemma uint256_ge_ok {C: VyperConfig} (a b: uint256):
+  uint256_ge a b = uint256_iszero (uint256_lt a b).
+Proof.
+unfold uint256_ge.
+unfold uint256_lt.
+unfold uint256_iszero.
+rewrite Z.geb_leb.
+rewrite Z.leb_antisym.
+rewrite Bool.if_negb.
+unfold one256. unfold zero256.
+destruct (Z_of_uint256 a <? Z_of_uint256 b); now rewrite uint256_ok.
+Qed.
+
+Lemma uint256_ne_ok {C: VyperConfig} (a b: uint256):
+  uint256_ne a b = uint256_iszero (uint256_eq a b).
+Proof.
+unfold uint256_ne.
+unfold uint256_eq.
+unfold uint256_iszero.
+unfold one256. unfold zero256.
+destruct (Z_of_uint256 a =? Z_of_uint256 b); now rewrite uint256_ok.
 Qed.

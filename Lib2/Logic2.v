@@ -1,4 +1,40 @@
-From Coq Require Setoid.
+From Coq Require Setoid Eqdep_dec.
+
+Lemma if_yes Result cond yes no
+             (E: cond = true):
+  (if cond as cond' return cond = cond' -> Result
+     then yes
+     else no) eq_refl
+    =
+   yes E.
+Proof.
+assert (Irrel: forall E', yes E' = yes E).
+{
+  intro E'. f_equal.
+  apply Eqdep_dec.eq_proofs_unicity.
+  decide equality.
+}
+destruct cond. { apply Irrel. }
+discriminate.
+Qed.
+
+Lemma if_no Result cond yes no
+            (E: cond = false):
+  (if cond as cond' return cond = cond' -> Result
+     then yes
+     else no) eq_refl
+    =
+   no E.
+Proof.
+assert (Irrel: forall E', no E' = no E).
+{
+  intro E'. f_equal.
+  apply Eqdep_dec.eq_proofs_unicity.
+  decide equality.
+}
+destruct cond. { discriminate. }
+apply Irrel.
+Qed.
 
 Lemma b_false {b: bool} {P: Prop} (R: b = true <-> P):
   b = false <-> ~P.

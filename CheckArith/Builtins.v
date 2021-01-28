@@ -183,7 +183,7 @@ Definition builtin_names_std
     ; builtin_name_uint256_mul    := "uint256_mul"
     ; builtin_name_uint256_div    := "uint256_div"
     ; builtin_name_uint256_mod    := "uint256_mod"
-    ; builtin_name_uint256_pow    := "uint256_pow"
+    ; builtin_name_uint256_pow    := "uint256_exp" (* not pow! *)
     ; builtin_name_uint256_not    := "uint256_not"
     ; builtin_name_uint256_iszero := "uint256_iszero"
     ; builtin_name_uint256_and    := "uint256_and"

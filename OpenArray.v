@@ -70,9 +70,54 @@ destruct a as [|h]. { now destruct n. }
 cbn. apply IHm.
 Qed.
 
+Lemma view0 {Value: Type} {Zero: Value} {A: Type} (C: class Zero A)
+            (a: A) (n: N):
+  view a n 0 = nil.
+Proof.
+assert (LenOk := view_len a n 0).
+remember (view _ _ _) as v.
+destruct v. 2:discriminate.
+trivial.
+Qed.
+
+Lemma view1 {Value: Type} {Zero: Value} {A: Type} (C: class Zero A)
+            (a: A) (n: N):
+  view a n 1 = get a n :: nil.
+Proof.
+assert (LenOk := view_len a n 1).
+remember (view _ _ _) as v.
+destruct v as [|x]. { discriminate. }
+destruct v. 2:discriminate.
+assert (OkX := view_ok a n 1 0 N.lt_0_1).
+rewrite<- Heqv in OkX.
+cbn in OkX.
+rewrite N.add_0_r in OkX.
+inversion OkX. now subst x.
+Qed.
+
+Lemma view2 {Value: Type} {Zero: Value} {A: Type} (C: class Zero A)
+            (a: A) (n: N):
+  view a n 2 = get a n :: get a (N.succ n) :: nil.
+Proof.
+assert (LenOk := view_len a n 2).
+remember (view _ _ _) as v.
+destruct v as [|x]. { discriminate. }
+destruct v as [|y]. { discriminate. }
+destruct v. 2:discriminate.
+assert (OkX := view_ok a n 2 0 N.lt_0_2).
+assert (OkY := view_ok a n 2 1 N.lt_1_2).
+rewrite<- Heqv in OkX.
+rewrite<- Heqv in OkY.
+rewrite N.add_0_r in OkX.
+rewrite N.add_1_r in OkY.
+cbn in OkX.
+replace (N.to_nat 1) with 1 in OkY by trivial.
+cbn in OkY.
+inversion OkX. subst x.
+inversion OkY. now subst y.
+Qed.
 
 Section ListInst.
-
   Context {Value: Type} (Zero: Value).
 
   Lemma list_empty_ok (n: N):

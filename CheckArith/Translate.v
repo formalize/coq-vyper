@@ -93,31 +93,34 @@ Definition translate_small_stmt {C: VyperConfig} (B: builtin_names_config)
             scratch[0] = a                                     # a
             scratch[1] = b                                     # a           b
             scratch[1] = builtin("uint256_add", scratch, 2)    # a           a + b
-            scratch[0] = builtin("uint256_lt", scratch, 2)     # a < a + b   a + b
+            scratch[2] = a                                     # a           a + b      a
+            scratch[0] = builtin("uint256_lt", scratch1, 2)    # a + b < a   a + b      a
             if scratch[0]:
-              dst = scratch[1]
-            else:
               raise "arithmetic error"
+            else:
+              dst = scratch[1]
           *)
           Semicolon
             (ast_pair_to_scratch a b scratch)
             (Semicolon
+              (SmallStmt (BuiltinCall (N.succ scratch)
+                                      (builtin_name_uint256_add B)
+                                      scratch 2%N))
               (Semicolon
-                (SmallStmt (BuiltinCall (N.succ scratch)
-                                        (builtin_name_uint256_add B)
-                                        scratch 2%N))
-                (SmallStmt (BuiltinCall scratch
-                                        (builtin_name_uint256_lt B)
-                                        scratch 2%N)))
-              (IfElseStmt scratch
-                (SmallStmt (Copy dst (N.succ scratch)))
-                (ast_raise_arithmetic_error scratch)))
+                (SmallStmt (Copy (scratch + 2)%N a))
+                (Semicolon
+                  (SmallStmt (BuiltinCall scratch
+                                          (builtin_name_uint256_lt B)
+                                          (N.succ scratch) 2%N))
+                  (IfElseStmt scratch
+                    (ast_raise_arithmetic_error scratch)
+                    (SmallStmt (Copy dst (N.succ scratch)))))))
       | L10.AST.Sub => fun _ =>
           (*
              scratch0 = a
              scratch1 = b
-             dst = builtin("uint256_lt", scratch, 2)
-             if dst:
+             scratch2 = builtin("uint256_lt", scratch, 2)
+             if scratch2:
                raise "arithmetic error"
              else:
                dst = builtin("uint256_sub", scratch, 2)
@@ -125,8 +128,8 @@ Definition translate_small_stmt {C: VyperConfig} (B: builtin_names_config)
           Semicolon
             (ast_pair_to_scratch a b scratch)
             (Semicolon
-              (SmallStmt (BuiltinCall dst (builtin_name_uint256_lt B) scratch 2%N))
-              (IfElseStmt dst
+              (SmallStmt (BuiltinCall (scratch + 2)%N (builtin_name_uint256_lt B) scratch 2%N))
+              (IfElseStmt (scratch + 2)%N
                 (ast_raise_arithmetic_error scratch)
                 (SmallStmt (BuiltinCall dst (builtin_name_uint256_sub B) scratch 2))))
       | L10.AST.Mul => fun _ =>
@@ -198,31 +201,33 @@ Definition translate_small_stmt {C: VyperConfig} (B: builtin_names_config)
              scratch1 = b                                   #    a            b
              scratch0 = builtin("uint256_shl", scratch, 2)  #    a<<b         b
              scratch1 = builtin("uint256_shr", scratch, 2)  #    a<<b         (a<<b)>>b
-             dst = scratch0
-             scratch0 = a                                   #    a            (a<<b)>>b
-             scratch0 = builtin("uint256_eq", scratch, 2)   #    a==(a<<b)>>b (a<<b)>>b
-             if scratch0:
-               pass
+             # I had originally written this:
+             #   dst = scratch0
+             #   scratch0 = a                               #    a            (a<<b)>>b
+             # But Coq rejected it because dst may be aliased with a here.
+             # Here's the correct code:
+             scratch2 = a                                   #    a<<b         (a<<b)>>b    a
+             scratch1 = builtin("uint256_eq", scratch1, 2)  #    (a<<b)>>b==a (a<<b)>>b    a
+             if scratch1:
+               dst = scratch0
              else:
                raise "arithmetic error"
           *)
           Semicolon
-             (ast_pair_to_scratch a b (N.succ scratch))
+             (ast_pair_to_scratch a b scratch)
              (Semicolon
                (SmallStmt (BuiltinCall scratch (builtin_name_uint256_shl B) scratch 2%N))
                (Semicolon
                  (SmallStmt (BuiltinCall (N.succ scratch) (builtin_name_uint256_shr B)
                                          scratch 2%N))
                  (Semicolon
-                   (SmallStmt (Copy dst scratch))
-                   (Semicolon
-                     (SmallStmt (Copy scratch a))
+                   (SmallStmt (Copy (scratch + 2)%N a))
                      (Semicolon
-                       (SmallStmt (BuiltinCall scratch (builtin_name_uint256_eq B)
-                                               scratch 2%N))
-                       (IfElseStmt scratch
-                         (SmallStmt Pass)
-                         (ast_raise_arithmetic_error scratch)))))))
+                       (SmallStmt (BuiltinCall (N.succ scratch) (builtin_name_uint256_eq B)
+                                               (N.succ scratch) 2%N))
+                       (IfElseStmt (N.succ scratch)
+                         (SmallStmt (Copy dst scratch))
+                         (ast_raise_arithmetic_error scratch))))))
       | L10.AST.Pow => fun E => False_rect _ (NEpow E)
       end eq_refl
    | PowConstBase dst base exp =>
@@ -262,8 +267,8 @@ Definition translate_small_stmt {C: VyperConfig} (B: builtin_names_config)
                  else (*
                          scratch0 = uint256_max_power base
                          scratch1 = exp
-                         dst = builtin("uint256_lt", scratch, 2)
-                         if dst:
+                         scratch2 = builtin("uint256_lt", scratch, 2)
+                         if scratch2:
                            raise "arithmetic error"
                          else:
                            scratch0 = base
@@ -275,9 +280,9 @@ Definition translate_small_stmt {C: VyperConfig} (B: builtin_names_config)
                         (Semicolon
                           (SmallStmt (Copy (N.succ scratch) exp))
                           (Semicolon
-                            (SmallStmt (BuiltinCall dst (builtin_name_uint256_lt B)
+                            (SmallStmt (BuiltinCall (scratch + 2)%N (builtin_name_uint256_lt B)
                                                     scratch 2))
-                            (IfElseStmt dst
+                            (IfElseStmt (scratch + 2)%N
                               (ast_raise_arithmetic_error scratch)
                               (Semicolon
                                 (SmallStmt (Const scratch base))
@@ -299,9 +304,9 @@ Definition translate_small_stmt {C: VyperConfig} (B: builtin_names_config)
             else (*
                    scratch0 = base
                    scratch1 = uint256_max_base zexp + 1
-                   dst = builtin("uint256_lt", scratch, 2)
-                   if dst:
-                     scratch0 = exp
+                   scratch1 = builtin("uint256_lt", scratch, 2)
+                   if scratch1:
+                     scratch1 = exp
                      dst = builtin("uint256_pow", scratch, 2)
                    else:
                      raise "arithmetic error"
@@ -312,11 +317,11 @@ Definition translate_small_stmt {C: VyperConfig} (B: builtin_names_config)
                  (SmallStmt (Const (N.succ scratch)
                                    (uint256_of_Z (Z.succ (uint256_max_base zexp)))))
                  (Semicolon
-                   (SmallStmt (BuiltinCall dst (builtin_name_uint256_lt B)
+                   (SmallStmt (BuiltinCall (N.succ scratch) (builtin_name_uint256_lt B)
                                            scratch 2))
-                   (IfElseStmt dst
+                   (IfElseStmt (N.succ scratch)
                      (Semicolon
-                       (SmallStmt (Const scratch exp))
+                       (SmallStmt (Const (N.succ scratch) exp))
                        (SmallStmt (BuiltinCall dst (builtin_name_uint256_pow B)
                                                scratch 2)))
                      (ast_raise_arithmetic_error scratch))))
