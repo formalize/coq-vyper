@@ -194,6 +194,25 @@ apply (relation_quad Z.ltb_lt Z.leb_le).
 apply Z.lt_succ_r.
 Qed.
 
+(* TODO: to List2 *)
+Lemma list_eq {A: Type} (l l': list A)
+                        (LenOk: List.length l = List.length l')
+                        (Ok: forall i, List.nth_error l i = List.nth_error l' i):
+  l = l'.
+Proof.
+intros.
+revert l' LenOk Ok. induction l as [|h]; intros.
+{ now destruct l'. }
+destruct l' as [|h']. { easy. }
+assert (HeadOk := Ok 0). cbn in HeadOk.
+inversion HeadOk. subst h'. clear HeadOk.
+f_equal.
+apply IHl.
+{ cbn in LenOk. now inversion LenOk. }
+intro i. assert (Q := Ok (S i)). cbn in Q.
+exact Q.
+Qed.
+
 Lemma translate_small_stmt_ok {C: VyperConfig}
                               {bigger_call_depth_bound smaller_call_depth_bound: nat}
                               (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
@@ -803,3 +822,236 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
     repeat (split; trivial); intros n L; repeat rewrite OpenArray.put_ok; aliasing;
     destruct (dst =? n)%N; trivial; apply (Agree n L).
 }
+{ (* PrivateCall *)
+  assert (ArgsAgree: let _ := memory_impl in
+                     OpenArray.view mem' args_offset args_count
+                      =
+                     OpenArray.view mem args_offset args_count).
+  {
+    cbn.
+    assert (Len' := let _ := memory_impl in OpenArray.view_len mem' args_offset args_count).
+    assert (Len  := let _ := memory_impl in OpenArray.view_len mem  args_offset args_count).
+    apply list_eq.
+    { rewrite Len'. now rewrite Len. }
+    intro i.
+    assert (D := Nat.lt_ge_cases i (N.to_nat args_count)).
+    case D; clear D; intro D.
+    {
+      assert (L: (N.of_nat i < args_count)%N) by lia.
+      assert (R' := let _ := memory_impl in
+                    OpenArray.view_ok mem' args_offset args_count (N.of_nat i) L).
+      assert (R  := let _ := memory_impl in
+                    OpenArray.view_ok mem  args_offset args_count (N.of_nat i) L).
+      rewrite Nat2N.id in R'. rewrite Nat2N.id in R.
+      rewrite R'. rewrite R.
+      f_equal.
+      apply Agree.
+      destruct args_count; lia.
+    }
+    now repeat rewrite (proj2 (List.nth_error_None _ i)) by now rewrite OpenArray.view_len.
+  }
+  cbn in ArgsAgree.
+  rewrite ArgsAgree.
+  (* argument eval completed *)
+
+  (* this stupid thing again! see also From20To30/Expr.v and ConstFold.v
+     unfortunately it's difficult to generalize
+   *)
+  assert (D: L30.Descend.fun_ctx_descend (translate_fun_ctx B scratch fc)
+              (callset_descend_small_stmt eq_refl CallOk') Ebound eq_refl
+              =
+             match L30.Descend.fun_ctx_descend fc CallOk Ebound eq_refl with
+             | Some ctx => Some (translate_fun_ctx B scratch ctx)
+             | None => None
+             end).
+  {
+    unfold L30.Descend.fun_ctx_descend.
+    assert (InnerOk: forall (d1 d2: decl)
+                          (Edecl1: cd_declmap cd name = Some d1)
+                          (Edecl2: cd_declmap
+                                     (calldag_map (translate_decl B scratch)
+                                       (Translate.translate_calldag_helper B scratch cd) cd) name
+                                    =
+                                   Some d2),
+                 L30.Descend.fun_ctx_descend_inner (translate_fun_ctx B scratch fc)
+                    (callset_descend_small_stmt eq_refl CallOk')
+                    Ebound eq_refl Edecl2
+                  =
+                 match L30.Descend.fun_ctx_descend_inner fc CallOk Ebound eq_refl Edecl1 with
+                 | Some ctx => Some (translate_fun_ctx B scratch ctx)
+                 | None => None
+                 end).
+    {
+      intros.
+      unfold Descend.fun_ctx_descend_inner.
+      remember (fun depth Edepth =>
+          Some
+            {|
+            fun_name := name;
+            fun_depth := depth;
+            fun_depth_ok := Edepth;
+            fun_decl := d2;
+            fun_decl_ok := Edecl2;
+            fun_bound_ok := Descend.call_descend' (translate_fun_ctx B scratch fc)
+                        (callset_descend_small_stmt eq_refl CallOk') Ebound eq_refl Edecl2 Edepth |})
+        as some_branch_l.
+      remember (fun Edepth => False_rect _ _) as none_branch_l.
+      remember (fun depth Edepth =>
+        Some
+          {|
+          fun_name := name;
+          fun_depth := depth;
+          fun_depth_ok := Edepth;
+          fun_decl := d1;
+          fun_decl_ok := Edecl1;
+          fun_bound_ok := Descend.call_descend' fc CallOk Ebound eq_refl Edecl1 Edepth |})
+        as some_branch_r.
+      remember (fun Edepth : cd_depthmap cd name = None =>
+                  False_rect (option (fun_ctx cd smaller_call_depth_bound))
+                 (Descend.fun_ctx_descend_helper Edecl1 Edepth)) as none_branch_r.
+      assert (NoneOkL: forall Edepth, none_branch_l Edepth = None).
+      { intro. exfalso. exact (Descend.fun_ctx_descend_helper Edecl2 Edepth). }
+      assert (NoneOkR: forall Edepth, none_branch_r Edepth = None).
+      { intro. exfalso. exact (Descend.fun_ctx_descend_helper Edecl1 Edepth). }
+      clear Heqnone_branch_l Heqnone_branch_r.
+      revert none_branch_l none_branch_r NoneOkL NoneOkR.
+      assert (SomeBranchOk: forall (depth: nat)
+                                   (Edepth1: cd_depthmap cd name = Some depth)
+                                   (Edepth2: cd_depthmap
+                                              (calldag_map (translate_decl B scratch)
+                                                 (Translate.translate_calldag_helper B scratch cd) cd) name = Some depth),
+                     some_branch_l depth Edepth2 
+                      =
+                     match some_branch_r depth Edepth1 with
+                     | Some ctx => Some (translate_fun_ctx B scratch ctx)
+                     | None => None
+                     end).
+      {
+        intros. subst. unfold translate_fun_ctx. cbn.
+        f_equal. unfold fun_ctx_map. cbn.
+        assert (D: d2 = cached_mapped_decl (translate_decl B scratch)
+              (Translate.translate_calldag_helper B scratch cd) cd
+              {|
+              fun_name := name;
+              fun_depth := depth;
+              fun_depth_ok := Edepth1;
+              fun_decl := d1;
+              fun_decl_ok := Edecl1;
+              fun_bound_ok := Descend.call_descend' fc CallOk eq_refl eq_refl Edecl1 Edepth1 |}).
+        {
+          unfold cached_mapped_decl. cbn.
+          remember (Calldag.calldag_map_fun_ctx_fun_decl_helper _ _ cd _) as Bad. clear HeqBad.
+          cbn in Bad. revert Bad.
+          destruct (cd_declmap
+            (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd) name). 
+          { now inversion Edecl2. }
+          intro Bad. discriminate.
+        }
+        subst. unfold fun_ctx_map. cbn.
+        f_equal; apply PropExtensionality.proof_irrelevance.
+      } (* SomeBranchOk *)
+      clear Heqsome_branch_l Heqsome_branch_r
+            CallOk CallOk' Edecl1 Edecl2 d1 d2 DoCallOk
+            do_call do_call'.
+      revert some_branch_l some_branch_r SomeBranchOk.
+      rewrite<- (calldag_map_depthmap_ok (translate_decl B scratch)
+                  (Translate.translate_calldag_helper B scratch cd)).
+      destruct (cd_depthmap (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd)
+       (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd)) name), (cd_depthmap cd name);
+        intros; try apply SomeBranchOk;
+        rewrite (NoneOkL eq_refl); rewrite (NoneOkR eq_refl); trivial.
+    } (* InnerOk *)
+    remember (@Descend.fun_ctx_descend_inner C bigger_call_depth_bound smaller_call_depth_bound
+      (@calldag_map C (@decl C) (@decl C) (@decl_callset C) false (@decl_callset C)
+         (@translate_decl C B scratch) (@Translate.translate_calldag_helper C B scratch cd) cd)
+      (@PrivateCall C dst name args_offset args_count)
+      (@translate_fun_ctx C B scratch bigger_call_depth_bound cd fc)
+      (@callset_descend_small_stmt C (@SmallStmt C (@PrivateCall C dst name args_offset args_count))
+         (@PrivateCall C dst name args_offset args_count)
+         (@decl_callset C
+            (@fun_decl C (@decl C) (@decl_callset C) false
+               (@calldag_map C (@decl C) (@decl C) (@decl_callset C) false 
+                  (@decl_callset C) (@translate_decl C B scratch)
+                  (@Translate.translate_calldag_helper C B scratch cd) cd) bigger_call_depth_bound
+               (@translate_fun_ctx C B scratch bigger_call_depth_bound cd fc)))
+         (@eq_refl (@stmt C) (@SmallStmt C (@PrivateCall C dst name args_offset args_count))) CallOk')
+      Ebound name dst args_offset args_count
+      (@eq_refl (@small_stmt C) (@PrivateCall C dst name args_offset args_count))) as inner'.
+    remember (@Descend.fun_ctx_descend_inner C bigger_call_depth_bound smaller_call_depth_bound cd
+        (@PrivateCall C dst name args_offset args_count) fc CallOk Ebound name dst args_offset
+        args_count (@eq_refl (@small_stmt C) (@PrivateCall C dst name args_offset args_count)))
+      as inner.
+    clear Heqinner' Heqinner.
+    subst.
+    assert (T := calldag_map_declmap (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd name).
+    remember (cd_declmap cd name) as maybe_d. 
+    remember (cd_declmap (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd) name) as maybe_d'.
+    now destruct maybe_d', maybe_d.
+  } (* D *)
+  cbn in *.
+  destruct Descend.fun_ctx_descend; destruct Descend.fun_ctx_descend; try discriminate.
+  2:easy.
+  inversion D; subst.
+  rewrite DoCallOk.
+  destruct do_call as (world', call_result).
+  destruct call_result. 2:easy.
+  repeat (split; trivial); intros n L.
+  repeat rewrite OpenArray.put_ok.
+  destruct (dst =? n)%N; trivial.
+  apply (Agree n L).
+}
+{ (* BuiltinCall *)
+  assert (ArgsAgree: let _ := memory_impl in
+                     OpenArray.view mem' args_offset args_count
+                      =
+                     OpenArray.view mem args_offset args_count).
+  {
+    cbn.
+    assert (Len' := let _ := memory_impl in OpenArray.view_len mem' args_offset args_count).
+    assert (Len  := let _ := memory_impl in OpenArray.view_len mem  args_offset args_count).
+    apply list_eq.
+    { rewrite Len'. now rewrite Len. }
+    intro i.
+    assert (D := Nat.lt_ge_cases i (N.to_nat args_count)).
+    case D; clear D; intro D.
+    {
+      assert (L: (N.of_nat i < args_count)%N) by lia.
+      assert (R' := let _ := memory_impl in
+                    OpenArray.view_ok mem' args_offset args_count (N.of_nat i) L).
+      assert (R  := let _ := memory_impl in
+                    OpenArray.view_ok mem  args_offset args_count (N.of_nat i) L).
+      rewrite Nat2N.id in R'. rewrite Nat2N.id in R.
+      rewrite R'. rewrite R.
+      f_equal.
+      apply Agree.
+      destruct args_count; lia.
+    }
+    now repeat rewrite (proj2 (List.nth_error_None _ i)) by now rewrite OpenArray.view_len.
+  }
+  cbn in ArgsAgree.
+  rewrite ArgsAgree.
+  destruct (builtins name) as [(arity, b)|]. 2:easy.
+  pose (arity_check := let _ := memory_impl in arity =? Datatypes.length (OpenArray.view mem args_offset args_count)).
+  assert (Heqarity_check: arity_check = arity_check) by exact eq_refl.
+  unfold arity_check in Heqarity_check at 1.
+  destruct arity_check.
+  {
+    repeat rewrite if_yes with (E := Heqarity_check).
+    destruct call_builtin as (world', call_result).
+    destruct call_result. 2:easy.
+    repeat (split; trivial); intros n L.
+    repeat rewrite OpenArray.put_ok.
+    destruct (dst =? n)%N; trivial.
+    apply (Agree n L).
+  }
+  now repeat rewrite if_no with (E := Heqarity_check).
+}
+{ (* Abort *) easy. }
+{ (* Return *)
+  split. { f_equal. apply Agree. lia. }
+  easy.
+}
+(* Raise *)
+split. { f_equal. f_equal. apply Agree. lia. }
+easy.
+Qed.
