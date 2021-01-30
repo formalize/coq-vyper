@@ -21,7 +21,8 @@ $letter = [_A-Za-z]
 
 :-
 
-$white;
+-- $white;
+[\ \r\n];
 "#" .*;
 
 $letter ($letter | $dec)*             { \ p s -> (p, Token.Name s) }
