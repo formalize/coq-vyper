@@ -60,5 +60,8 @@ printHelp = do
 main = do
     (opts, args) <- splitArgs <$> getArgs
     case opts of
-        [] -> compileFiles args
+        [] -> 
+            case args of
+                [] -> printHelp
+                _ -> compileFiles args
         _ -> printHelp
