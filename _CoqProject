@@ -66,6 +66,7 @@ CheckArith/CheckedArith.v
 CheckArith/Builtins.v
 CheckArith/Translate.v
 CheckArith/Stmt.v
+CheckArith/Call.v
 
 
 Hash/UInt63.v

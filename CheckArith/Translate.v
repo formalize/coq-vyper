@@ -343,12 +343,11 @@ Fixpoint translate_stmt {C: VyperConfig} (B: builtin_names_config)
    end.
 
 Definition translate_decl {C: VyperConfig} (B: builtin_names_config)
-                          (scratch: N)
                           (d: decl)
 : decl
 := match d with
    | StorageVarDecl var => d
-   | FunDecl name arity body => FunDecl name arity (translate_stmt B scratch body)
+   | FunDecl name arity body => FunDecl name arity (translate_stmt B (var_cap_stmt body) body)
    end.
 
 Ltac rr := cbn; trivial;
@@ -403,11 +402,10 @@ Qed.
 
 Lemma callset_translate_decl {C: VyperConfig}
                              (B: builtin_names_config)
-                             (scratch: N)
                              (d: decl)
                              (x: string):
   let _ := string_set_impl in
-  FSet.has (decl_callset (translate_decl B scratch d)) x
+  FSet.has (decl_callset (translate_decl B d)) x
    =
   FSet.has (decl_callset d) x.
 Proof.
@@ -417,11 +415,10 @@ Qed.
 
 Local Lemma translate_calldag_helper {C: VyperConfig}
                                      (B: builtin_names_config)
-                                     (scratch: N)
                                      (cd: calldag):
   let H := string_set_impl in
   forall d: decl,
-    FSet.is_subset (decl_callset (translate_decl B scratch d)) (decl_callset d) = true.
+    FSet.is_subset (decl_callset (translate_decl B d)) (decl_callset d) = true.
 Proof.
 cbn. intro.
 apply FSet.is_subset_equal.
@@ -431,17 +428,15 @@ Qed.
 
 Definition translate_calldag {C: VyperConfig}
                              (B: builtin_names_config)
-                             (scratch: N)
                              (cd: calldag)
-:= calldag_map (translate_decl B scratch)
-               (translate_calldag_helper B scratch cd)
+:= calldag_map (translate_decl B)
+               (translate_calldag_helper B cd)
                cd.
 
 Definition translate_fun_ctx {C: VyperConfig}
                              (B: builtin_names_config)
-                             (scratch: N)
                              {bound: nat}
                              {cd: calldag}
                              (fc: fun_ctx cd bound)
-: fun_ctx (calldag_map (translate_decl B scratch) (translate_calldag_helper B scratch cd) cd) bound
-:= fun_ctx_map (translate_decl B scratch) _ cd fc.
+: fun_ctx (calldag_map (translate_decl B) (translate_calldag_helper B cd) cd) bound
+:= fun_ctx_map (translate_decl B) _ cd fc.

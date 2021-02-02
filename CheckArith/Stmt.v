@@ -222,7 +222,7 @@ Lemma translate_small_stmt_ok {C: VyperConfig}
                               (BuiltinsOk: BuiltinsSupportUInt256 B builtins)
                               {cd: L30.Descend.calldag}
                               (fc: fun_ctx cd bigger_call_depth_bound)
-                              {do_call': forall (fc': fun_ctx (translate_calldag B scratch cd)
+                              {do_call': forall (fc': fun_ctx (translate_calldag B cd)
                                                               smaller_call_depth_bound)
                                                 (world: world_state)
                                                 (arg_values: list uint256),
@@ -232,7 +232,7 @@ Lemma translate_small_stmt_ok {C: VyperConfig}
                                                (arg_values: list uint256),
                                            world_state * expr_result uint256}
                               (DoCallOk: forall fc' world arg_values,
-                                     do_call' (translate_fun_ctx B scratch fc') world arg_values
+                                     do_call' (translate_fun_ctx B fc') world arg_values
                                       =
                                      do_call fc' world arg_values)
                               (ss: small_stmt)
@@ -240,7 +240,7 @@ Lemma translate_small_stmt_ok {C: VyperConfig}
                                  FSet.is_subset (stmt_callset (translate_small_stmt B scratch ss))
                                                 (decl_callset
                                                    (fun_decl
-                                                     (translate_fun_ctx B scratch fc)))
+                                                     (translate_fun_ctx B fc)))
                                  = true)
                               (CallOk: let _ := string_set_impl in 
                                  FSet.is_subset (small_stmt_callset ss)
@@ -252,7 +252,7 @@ Lemma translate_small_stmt_ok {C: VyperConfig}
                               (Agree: MemoryPrefixAgree mem' mem scratch):
   let _ := string_map_impl in
   let _ := memory_impl in
-  let '(w', m', result') := interpret_stmt Ebound (translate_fun_ctx B scratch fc)
+  let '(w', m', result') := interpret_stmt Ebound (translate_fun_ctx B fc)
                                                   do_call' builtins
                                                   world mem' (translate_small_stmt B scratch ss)
                                                   CallOk' in
@@ -285,11 +285,11 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
   apply (Agree n L).
 }
 { (* StorageGet *)
-  assert (D := calldag_map_declmap (translate_decl B scratch)
-                                   (Translate.translate_calldag_helper B scratch cd)
+  assert (D := calldag_map_declmap (translate_decl B)
+                                   (Translate.translate_calldag_helper B cd)
                                    cd name).
   destruct (cd_declmap
-     (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd)
+     (calldag_map (translate_decl B) (Translate.translate_calldag_helper B cd) cd)
      name) as [d'|], (cd_declmap cd name) as [d|]; try discriminate.
   2:easy. (* not found *)
   destruct d; cbn in D; inversion D; subst d'.
@@ -301,11 +301,11 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
   apply (Agree n L).
 }
 { (* StoragePut *)
-  assert (D := calldag_map_declmap (translate_decl B scratch)
-                                   (Translate.translate_calldag_helper B scratch cd)
+  assert (D := calldag_map_declmap (translate_decl B)
+                                   (Translate.translate_calldag_helper B cd)
                                    cd name).
   destruct (cd_declmap
-     (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd)
+     (calldag_map (translate_decl B) (Translate.translate_calldag_helper B cd) cd)
      name) as [d'|], (cd_declmap cd name) as [d|]; try discriminate.
   2:easy. (* not found *)
   destruct d; cbn in D; inversion D; subst d'.
@@ -857,11 +857,11 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
   (* this stupid thing again! see also From20To30/Expr.v and ConstFold.v
      unfortunately it's difficult to generalize
    *)
-  assert (D: L30.Descend.fun_ctx_descend (translate_fun_ctx B scratch fc)
+  assert (D: L30.Descend.fun_ctx_descend (translate_fun_ctx B fc)
               (callset_descend_small_stmt eq_refl CallOk') Ebound eq_refl
               =
              match L30.Descend.fun_ctx_descend fc CallOk Ebound eq_refl with
-             | Some ctx => Some (translate_fun_ctx B scratch ctx)
+             | Some ctx => Some (translate_fun_ctx B ctx)
              | None => None
              end).
   {
@@ -869,16 +869,16 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
     assert (InnerOk: forall (d1 d2: decl)
                           (Edecl1: cd_declmap cd name = Some d1)
                           (Edecl2: cd_declmap
-                                     (calldag_map (translate_decl B scratch)
-                                       (Translate.translate_calldag_helper B scratch cd) cd) name
+                                     (calldag_map (translate_decl B)
+                                       (Translate.translate_calldag_helper B cd) cd) name
                                     =
                                    Some d2),
-                 L30.Descend.fun_ctx_descend_inner (translate_fun_ctx B scratch fc)
+                 L30.Descend.fun_ctx_descend_inner (translate_fun_ctx B fc)
                     (callset_descend_small_stmt eq_refl CallOk')
                     Ebound eq_refl Edecl2
                   =
                  match L30.Descend.fun_ctx_descend_inner fc CallOk Ebound eq_refl Edecl1 with
-                 | Some ctx => Some (translate_fun_ctx B scratch ctx)
+                 | Some ctx => Some (translate_fun_ctx B ctx)
                  | None => None
                  end).
     {
@@ -892,7 +892,7 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
             fun_depth_ok := Edepth;
             fun_decl := d2;
             fun_decl_ok := Edecl2;
-            fun_bound_ok := Descend.call_descend' (translate_fun_ctx B scratch fc)
+            fun_bound_ok := Descend.call_descend' (translate_fun_ctx B fc)
                         (callset_descend_small_stmt eq_refl CallOk') Ebound eq_refl Edecl2 Edepth |})
         as some_branch_l.
       remember (fun Edepth => False_rect _ _) as none_branch_l.
@@ -918,19 +918,19 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
       assert (SomeBranchOk: forall (depth: nat)
                                    (Edepth1: cd_depthmap cd name = Some depth)
                                    (Edepth2: cd_depthmap
-                                              (calldag_map (translate_decl B scratch)
-                                                 (Translate.translate_calldag_helper B scratch cd) cd) name = Some depth),
+                                              (calldag_map (translate_decl B)
+                                                 (Translate.translate_calldag_helper B cd) cd) name = Some depth),
                      some_branch_l depth Edepth2 
                       =
                      match some_branch_r depth Edepth1 with
-                     | Some ctx => Some (translate_fun_ctx B scratch ctx)
+                     | Some ctx => Some (translate_fun_ctx B ctx)
                      | None => None
                      end).
       {
         intros. subst. unfold translate_fun_ctx. cbn.
         f_equal. unfold fun_ctx_map. cbn.
-        assert (D: d2 = cached_mapped_decl (translate_decl B scratch)
-              (Translate.translate_calldag_helper B scratch cd) cd
+        assert (D: d2 = cached_mapped_decl (translate_decl B)
+              (Translate.translate_calldag_helper B cd) cd
               {|
               fun_name := name;
               fun_depth := depth;
@@ -943,7 +943,7 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
           remember (Calldag.calldag_map_fun_ctx_fun_decl_helper _ _ cd _) as Bad. clear HeqBad.
           cbn in Bad. revert Bad.
           destruct (cd_declmap
-            (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd) name). 
+            (calldag_map (translate_decl B) (Translate.translate_calldag_helper B cd) cd) name). 
           { now inversion Edecl2. }
           intro Bad. discriminate.
         }
@@ -954,26 +954,26 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
             CallOk CallOk' Edecl1 Edecl2 d1 d2 DoCallOk
             do_call do_call'.
       revert some_branch_l some_branch_r SomeBranchOk.
-      rewrite<- (calldag_map_depthmap_ok (translate_decl B scratch)
-                  (Translate.translate_calldag_helper B scratch cd)).
-      destruct (cd_depthmap (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd)
-       (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd)) name), (cd_depthmap cd name);
+      rewrite<- (calldag_map_depthmap_ok (translate_decl B)
+                  (Translate.translate_calldag_helper B cd)).
+      destruct (cd_depthmap (calldag_map (translate_decl B) (Translate.translate_calldag_helper B cd)
+       (calldag_map (translate_decl B) (Translate.translate_calldag_helper B cd) cd)) name), (cd_depthmap cd name);
         intros; try apply SomeBranchOk;
         rewrite (NoneOkL eq_refl); rewrite (NoneOkR eq_refl); trivial.
     } (* InnerOk *)
     remember (@Descend.fun_ctx_descend_inner C bigger_call_depth_bound smaller_call_depth_bound
       (@calldag_map C (@decl C) (@decl C) (@decl_callset C) false (@decl_callset C)
-         (@translate_decl C B scratch) (@Translate.translate_calldag_helper C B scratch cd) cd)
+         (@translate_decl C B) (@Translate.translate_calldag_helper C B cd) cd)
       (@PrivateCall C dst name args_offset args_count)
-      (@translate_fun_ctx C B scratch bigger_call_depth_bound cd fc)
+      (@translate_fun_ctx C B bigger_call_depth_bound cd fc)
       (@callset_descend_small_stmt C (@SmallStmt C (@PrivateCall C dst name args_offset args_count))
          (@PrivateCall C dst name args_offset args_count)
          (@decl_callset C
             (@fun_decl C (@decl C) (@decl_callset C) false
                (@calldag_map C (@decl C) (@decl C) (@decl_callset C) false 
-                  (@decl_callset C) (@translate_decl C B scratch)
-                  (@Translate.translate_calldag_helper C B scratch cd) cd) bigger_call_depth_bound
-               (@translate_fun_ctx C B scratch bigger_call_depth_bound cd fc)))
+                  (@decl_callset C) (@translate_decl C B)
+                  (@Translate.translate_calldag_helper C B cd) cd) bigger_call_depth_bound
+               (@translate_fun_ctx C B bigger_call_depth_bound cd fc)))
          (@eq_refl (@stmt C) (@SmallStmt C (@PrivateCall C dst name args_offset args_count))) CallOk')
       Ebound name dst args_offset args_count
       (@eq_refl (@small_stmt C) (@PrivateCall C dst name args_offset args_count))) as inner'.
@@ -983,9 +983,9 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
       as inner.
     clear Heqinner' Heqinner.
     subst.
-    assert (T := calldag_map_declmap (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd name).
+    assert (T := calldag_map_declmap (translate_decl B) (Translate.translate_calldag_helper B cd) cd name).
     remember (cd_declmap cd name) as maybe_d. 
-    remember (cd_declmap (calldag_map (translate_decl B scratch) (Translate.translate_calldag_helper B scratch cd) cd) name) as maybe_d'.
+    remember (cd_declmap (calldag_map (translate_decl B) (Translate.translate_calldag_helper B cd) cd) name) as maybe_d'.
     now destruct maybe_d', maybe_d.
   } (* D *)
   cbn in *.
@@ -1054,4 +1054,295 @@ destruct ss; simpl; simpl in ScratchOk. (* cbn hangs up *)
 (* Raise *)
 split. { f_equal. f_equal. apply Agree. lia. }
 easy.
+Qed.
+
+Lemma translate_stmt_ok {C: VyperConfig}
+                        {bigger_call_depth_bound smaller_call_depth_bound: nat}
+                        (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+                        (builtins: string -> option builtin)
+                        (B: builtin_names_config)
+                        (scratch: N)
+                        (BuiltinsOk: BuiltinsSupportUInt256 B builtins)
+                        {cd: L30.Descend.calldag}
+                        (fc: fun_ctx cd bigger_call_depth_bound)
+                        {do_call': forall (fc': fun_ctx (translate_calldag B cd)
+                                                        smaller_call_depth_bound)
+                                          (world: world_state)
+                                          (arg_values: list uint256),
+                                      world_state * expr_result uint256}
+                        {do_call: forall (fc': fun_ctx cd smaller_call_depth_bound)
+                                         (world: world_state)
+                                         (arg_values: list uint256),
+                                     world_state * expr_result uint256}
+                        (DoCallOk: forall fc' world arg_values,
+                               do_call' (translate_fun_ctx B fc') world arg_values
+                                =
+                               do_call fc' world arg_values)
+                        (s: stmt)
+                        (CallOk': let _ := string_set_impl in 
+                           FSet.is_subset (stmt_callset (translate_stmt B scratch s))
+                                          (decl_callset
+                                             (fun_decl
+                                               (translate_fun_ctx B fc)))
+                           = true)
+                        (CallOk: let _ := string_set_impl in 
+                           FSet.is_subset (stmt_callset s)
+                                          (Callset.decl_callset (fun_decl fc))
+                           = true)
+                        (world: world_state)
+                        (mem' mem: memory)
+                        (ScratchOk: (var_cap_stmt s <= scratch)%N)
+                        (Agree: MemoryPrefixAgree mem' mem scratch):
+  let _ := string_map_impl in
+  let _ := memory_impl in
+  let '(w', m', result') := interpret_stmt Ebound (translate_fun_ctx B fc)
+                                                  do_call' builtins
+                                                  world mem' (translate_stmt B scratch s)
+                                                  CallOk' in
+  let '(w, m, result) := interpret_stmt Ebound fc do_call builtins world mem s CallOk in
+    result' = result
+     /\
+    w' = w
+     /\
+    MemoryPrefixAgree m' m scratch.
+Proof.
+revert world mem' mem ScratchOk CallOk' CallOk Agree.
+induction s; intros.
+{ (* SmallStmt *) now apply translate_small_stmt_ok. }
+{ (* IfElseStmt *)
+  cbn. cbn in ScratchOk.
+  rewrite (Agree cond_src) by lia.
+  destruct (Z_of_uint256 (OpenArray.get mem cond_src) =? 0)%Z.
+  { apply IHs2. { lia. } assumption. }
+  apply IHs1. { lia. } assumption.
+}
+2:{ (* Semicolon *)
+  cbn. cbn in ScratchOk.
+  assert (S1: (var_cap_stmt s1 <= scratch)%N) by lia.
+  assert (S2: (var_cap_stmt s2 <= scratch)%N) by lia.
+  assert (IHa := IHs1 world mem' mem S1
+                      (callset_descend_semicolon_left eq_refl CallOk')
+                      (callset_descend_semicolon_left eq_refl CallOk)
+                      Agree).
+  cbn in IHa.
+  (* there's some horror happening in IHa *)
+  remember (callset_descend_semicolon_left _ _) as LeftCallOk'.
+  clear HeqLeftCallOk'.
+  destruct (interpret_stmt Ebound (translate_fun_ctx B fc) do_call' builtins world mem'
+             (translate_stmt B scratch s1) LeftCallOk')
+    as ((world', loc'), stmt_result').
+  clear m.
+  destruct (interpret_stmt Ebound fc do_call builtins world mem s1
+             (callset_descend_semicolon_left eq_refl CallOk))
+    as ((w, m), stmt_result).
+  destruct IHa as (Eresult, (Eworld, Agree')).
+  subst stmt_result'. subst world'.
+  clear LeftCallOk'.
+  destruct stmt_result. 2-3:easy.
+  assert (IHb := IHs2 w loc' m S2
+                      (callset_descend_semicolon_right eq_refl CallOk')
+                      (callset_descend_semicolon_right eq_refl CallOk)
+                      Agree').
+  cbn in IHb.
+  remember (callset_descend_semicolon_right _ _) as RightCallOk'.
+  clear HeqRightCallOk'.
+  destruct (interpret_stmt Ebound (translate_fun_ctx B fc) do_call' builtins w loc'
+             (translate_stmt B scratch s2) RightCallOk')
+    as ((world'', loc''), stmt_result').
+  destruct (interpret_stmt Ebound fc do_call builtins w m s2
+                           (callset_descend_semicolon_right eq_refl CallOk))
+    as ((w'', m''), stmt_result).
+  destruct IHb as (Eresult, (Eworld, Agree'')).
+  subst stmt_result'. subst w''.
+  clear RightCallOk'.
+  now destruct stmt_result.
+}
+(* Loop *)
+cbn. cbn in ScratchOk.
+assert (VarOk: (var < scratch)%N) by lia.
+destruct (Z_of_uint256 count =? 0)%Z. { easy. }
+rewrite (Agree var VarOk).
+remember ((Z_of_uint256 (uint256_of_Z (Z_of_uint256 (OpenArray.get mem var) + Z_of_uint256 count - 1)) =?
+            Z_of_uint256 (OpenArray.get mem var) + Z_of_uint256 count - 1)%Z) as no_overflow.
+destruct no_overflow. 2:easy.
+remember (fix
+  interpret_loop_rec (world0 : world_state) (loc : memory) (cursor : Z) (countdown : nat) 
+                     (var0 : N)
+                     (CallOk0 : FSet.is_subset (stmt_callset (translate_stmt B scratch s))
+                                  (decl_callset
+                                     (cached_mapped_decl (translate_decl B)
+                                        (Translate.translate_calldag_helper B cd) cd fc)) =
+                                true) {struct countdown} :
+    world_state * memory * stmt_result uint256 :=
+    match countdown with
+    | 0 => (world0, loc, StmtSuccess)
+    | S new_countdown =>
+        match
+          interpret_stmt Ebound (translate_fun_ctx B fc) do_call' builtins world0
+            (OpenArray.put loc var0 (uint256_of_Z cursor)) (translate_stmt B scratch s) CallOk0
+        with
+        | (world', loc'', StmtAbort AbortBreak) => (world', loc'', StmtSuccess)
+        | (world', loc'', StmtSuccess) | (world', loc'', StmtAbort AbortContinue) =>
+            interpret_loop_rec world' loc'' (Z.succ cursor) new_countdown var0 CallOk0
+        | (world', loc'', StmtAbort (AbortException _) as result) |
+          (world', loc'', StmtAbort AbortReturnFromContract as result) |
+          (world', loc'', StmtAbort AbortRevert as result) |
+          (world', loc'', StmtReturnFromFunction _ as result) => (world', loc'', result)
+        end
+    end) as interpret_loop_rec'.
+remember (fix
+   interpret_loop_rec (world0 : world_state) (loc : memory) (cursor : Z) (countdown : nat) 
+                      (var0 : N)
+                      (CallOk0 : FSet.is_subset (stmt_callset s) (decl_callset (fun_decl fc)) = true)
+                      {struct countdown} : world_state * memory * stmt_result uint256 :=
+     match countdown with
+     | 0 => (world0, loc, StmtSuccess)
+     | S new_countdown =>
+         match
+           interpret_stmt Ebound fc do_call builtins world0
+             (OpenArray.put loc var0 (uint256_of_Z cursor)) s CallOk0
+         with
+         | (world', loc'', StmtAbort AbortBreak) => (world', loc'', StmtSuccess)
+         | (world', loc'', StmtSuccess) | (world', loc'', StmtAbort AbortContinue) =>
+             interpret_loop_rec world' loc'' (Z.succ cursor) new_countdown var0 CallOk0
+         | (world', loc'', StmtAbort (AbortException _) as result) |
+           (world', loc'', StmtAbort AbortReturnFromContract as result) |
+           (world', loc'', StmtAbort AbortRevert as result) |
+           (world', loc'', StmtReturnFromFunction _ as result) => (world', loc'', result)
+         end
+     end) as interpret_loop_rec.
+remember (Z.to_nat (Z_of_uint256 count)) as countdown.
+remember (Z_of_uint256 (OpenArray.get mem var)) as cursor.
+
+remember (Z_of_uint256 (OpenArray.get mem var) + Z_of_uint256 count - 1)%Z as cap.
+assert (CapRange: (0 <= cap < 2 ^ 256)%Z).
+{
+  symmetry in Heqno_overflow. rewrite Z.eqb_eq in Heqno_overflow.
+  rewrite uint256_ok in Heqno_overflow.
+  rewrite Z.mod_small_iff in Heqno_overflow by apply two_to_256_ne_0.
+  subst cursor cap.
+  enough (~ (2 ^ 256 < (Z_of_uint256 (OpenArray.get mem var) + Z_of_uint256 count - 1)%Z <= 0)%Z).
+  { tauto. }
+  intro Y.
+  assert (Bad := proj2 (Z.ltb_lt _ _) (Z.lt_le_trans _ _ _ (proj1 Y) (proj2 Y))).
+  cbn in Bad. discriminate.
+}
+
+assert (WeakMainLoopEq: 
+          cap = (cursor + Z_of_uint256 count - 1)%Z
+           \/
+          Z_of_uint256 count = 0%Z).
+{ left. subst cursor. exact Heqcap. }
+
+clear Heqcap Heqcursor Heqno_overflow.
+revert count world mem mem' Agree cursor WeakMainLoopEq CallOk' CallOk Heqcountdown.
+induction countdown; intros. (* ----------- induction -------------*)
+{
+  rewrite Heqinterpret_loop_rec'.
+  rewrite Heqinterpret_loop_rec.
+  easy.
+}
+cbn in IHs.
+assert (OkS: (var_cap_stmt s <= scratch)%N) by lia.
+rewrite Heqinterpret_loop_rec'. rewrite Heqinterpret_loop_rec. cbn.
+rewrite<- Heqinterpret_loop_rec'. rewrite<- Heqinterpret_loop_rec.
+assert (Agree': MemoryPrefixAgree (OpenArray.put mem' var (uint256_of_Z cursor))
+                                  (OpenArray.put mem var (uint256_of_Z cursor)) scratch).
+{
+  intros n L.
+  repeat rewrite OpenArray.put_ok.
+  destruct (var =? n)%N. { trivial. }
+  apply (Agree n L).
+}
+assert (IHs' := IHs world
+                  (OpenArray.put mem' var (uint256_of_Z cursor)) 
+                  (OpenArray.put mem var (uint256_of_Z cursor)) OkS
+                  (callset_descend_loop_body eq_refl CallOk')
+                  (callset_descend_loop_body eq_refl CallOk)
+                  Agree').
+destruct (interpret_stmt Ebound (translate_fun_ctx B fc) do_call')
+  as ((world1', loc1'), result1').
+destruct (interpret_stmt Ebound fc do_call) as ((world1, loc1), result1).
+destruct IHs' as (Rresult, (Rworld, Agree1)).
+subst result1' world1'.
+
+
+(* checking that the counter doesn't go below 0 *)
+pose (count' := uint256_of_Z (Z.pred (Z_of_uint256 count))).
+assert (CountOk: countdown = Z.to_nat (Z_of_uint256 count')).
+{
+  unfold count'. rewrite uint256_ok.
+  assert (R := uint256_range count).
+  remember (Z_of_uint256 count) as z. clear Heqz.
+  assert (W: z = Z.succ (Z.of_nat countdown)).
+  {
+    rewrite<- Nat2Z.inj_succ. rewrite Heqcountdown.
+    symmetry. apply Z2Nat.id. tauto.
+  }
+  subst z. rewrite Z.pred_succ.
+  replace (Z.of_nat countdown mod 2 ^ 256)%Z with (Z.of_nat countdown).
+  { symmetry. apply Nat2Z.id. }
+  symmetry. apply Z.mod_small.
+  split.
+  { (* 0 <= countdown *) apply Nat2Z.is_nonneg. }
+  exact (Z.lt_trans _ _ _ (Z.lt_succ_diag_r (Z.of_nat countdown)) (proj2 R)).
+}
+
+(* strengthening WeakMainLoopEq *)
+assert (MainLoopEq: cap = (cursor + Z_of_uint256 count - 1)%Z).
+{
+  enough (Z_of_uint256 count <> 0%Z). { tauto. }
+  intro J. rewrite J in *.
+  cbn in Heqcountdown. discriminate.
+}
+
+assert (NextLoopEq: cap = (Z.succ cursor + Z_of_uint256 count' - 1)%Z).
+{
+  rewrite MainLoopEq.
+  enough (Z_of_uint256 count = Z_of_uint256 count' + 1)%Z by lia.
+  subst countdown.
+  assert (R := uint256_range count).
+  assert (R' := uint256_range count').
+  lia.
+}
+
+assert (WeakNextLoopEq: (cap = Z.succ cursor + Z_of_uint256 count' - 1 \/ Z_of_uint256 count' = 0)%Z).
+{ left. apply NextLoopEq. }
+
+assert (IH := IHcountdown count' world1 loc1 loc1' Agree1 (Z.succ cursor)
+                          WeakNextLoopEq CallOk' CallOk CountOk).
+
+assert (FixCallL:
+         (@callset_descend_loop_body C (@Loop C var count' (@translate_stmt C B scratch s))
+           (@translate_stmt C B scratch s) var count'
+           (@decl_callset C
+              (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                 (@decl_callset C) (@translate_decl C B)
+                 (@Translate.translate_calldag_helper C B cd) cd bigger_call_depth_bound fc))
+           (@eq_refl (@stmt C) (@Loop C var count' (@translate_stmt C B scratch s))) CallOk')
+        =
+         (@callset_descend_loop_body C (@Loop C var count (@translate_stmt C B scratch s))
+          (@translate_stmt C B scratch s) var count
+          (@decl_callset C
+             (@cached_mapped_decl C (@decl C) (@decl C) (@decl_callset C) false 
+                (@decl_callset C) (@translate_decl C B)
+                (@Translate.translate_calldag_helper C B cd) cd bigger_call_depth_bound fc))
+          (@eq_refl (@stmt C) (@Loop C var count (@translate_stmt C B scratch s))) CallOk'))
+  by apply PropExtensionality.proof_irrelevance.
+rewrite FixCallL in IH.
+assert (FixCallR:
+         (@callset_descend_loop_body C (@Loop C var count' s) s var count'
+            (@decl_callset C
+               (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
+            (@eq_refl (@stmt C) (@Loop C var count' s)) CallOk)
+          =
+        (@callset_descend_loop_body C (@Loop C var count s) s var count
+           (@decl_callset C
+              (@fun_decl C (@decl C) (@decl_callset C) false cd bigger_call_depth_bound fc))
+           (@eq_refl (@stmt C) (@Loop C var count s)) CallOk))
+  by apply PropExtensionality.proof_irrelevance.
+rewrite FixCallR in IH. clear FixCallL FixCallR.
+
+destruct result1; try easy.
+now destruct a.
 Qed.

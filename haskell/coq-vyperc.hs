@@ -4,7 +4,7 @@ import System.FilePath (splitExtension)
 import Lexer (alexScanTokens)
 import Indent (addIndentsAndNewlines)
 import Parser (parse)
-import PatchedExtracted (compile, l10_decls_to_string, sample_config)
+import PatchedExtracted (compile, l10_decls_to_string, sample_config, builtin_names_std)
 import LexerUtils (recognizeKeywords)
 
 -- Split the command line parameters into options 
@@ -25,7 +25,7 @@ compileString src =
                 addIndentsAndNewlines $ 
                 recognizeKeywords $ 
                 alexScanTokens src in
-    case compile sample_config l10 of
+    case compile sample_config builtin_names_std l10 of
         Left err -> error err
         Right result -> result
 

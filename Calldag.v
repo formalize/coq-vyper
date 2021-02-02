@@ -1164,6 +1164,35 @@ Section CalldagMapFunCtx.
      |}.
 End CalldagMapFunCtx.
 
+Lemma fun_ctx_eq {C: VyperConfig} {Decl}
+                 {callset: Decl -> string_set}
+                 {may_call_undeclared: bool}
+                 (cd: generic_calldag callset may_call_undeclared)
+                 bound
+                 name1 depth depth_ok1 decl1 decl_ok1 bound_ok1
+                 name2       depth_ok2 decl2 decl_ok2 bound_ok2
+                 (Name: name1 = name2)
+                 (DeclOk: decl1 = decl2):
+  ({| fun_name := name1
+    ; fun_depth := depth
+    ; fun_depth_ok := depth_ok1
+    ; fun_decl := decl1
+    ; fun_decl_ok := decl_ok1
+    ; fun_bound_ok := bound_ok1 |}: fun_ctx cd bound)
+   =
+  {| fun_name := name2
+   ; fun_depth := depth
+   ; fun_depth_ok := depth_ok2
+   ; fun_decl := decl2
+   ; fun_decl_ok := decl_ok2
+   ; fun_bound_ok := bound_ok2 |}.
+Proof.
+intros. subst.
+assert (depth_ok1 = depth_ok2) by apply PropExtensionality.proof_irrelevance.
+assert (decl_ok1 = decl_ok2) by apply PropExtensionality.proof_irrelevance.
+assert (bound_ok1 = bound_ok2) by apply PropExtensionality.proof_irrelevance.
+now subst.
+Qed.
 
 (** Creating a function context from scratch in a calldag mapped with [calldag_maybe_map]
     is the same as creating it in the original calldag and than mapping it with [fun_ctx_map].
@@ -1302,35 +1331,45 @@ enough (A: forall depth E' E,
 intros. subst.
 f_equal. f_equal.
 unfold fun_ctx_maybe_map. cbn.
-assert (FunCtxEq: forall name1 depth depth_ok1 decl1 decl_ok1 bound_ok1
-                         name2       depth_ok2 decl2 decl_ok2 bound_ok2
-                         (Name: name1 = name2)
-                         (Decl: decl1 = decl2),
-  ({| fun_name := name1
-    ; fun_depth := depth
-    ; fun_depth_ok := depth_ok1
-    ; fun_decl := decl1
-    ; fun_decl_ok := decl_ok1
-    ; fun_bound_ok := bound_ok1 |}: fun_ctx cd' (S depth))
-   =
-  {| fun_name := name2
-   ; fun_depth := depth
-   ; fun_depth_ok := depth_ok2
-   ; fun_decl := decl2
-   ; fun_decl_ok := decl_ok2
-   ; fun_bound_ok := bound_ok2 |}).
-{
-  intros. subst.
-  assert (depth_ok1 = depth_ok2) by apply PropExtensionality.proof_irrelevance.
-  assert (decl_ok1 = decl_ok2) by apply PropExtensionality.proof_irrelevance.
-  assert (bound_ok1 = bound_ok2) by apply PropExtensionality.proof_irrelevance.
-  subst.
-  trivial.
-}
-apply FunCtxEq. { (* name: *) trivial. }
-clear FunCtxEq.
+apply fun_ctx_eq.
+{ (* name: *) trivial. }
 assert (Unsome: forall {T} (x y: T), Some x = Some y -> x = y).
 { intros T x y H. now inversion H. }
 apply Unsome.
 rewrite<- cached_maybe_mapped_decl_ok. cbn. symmetry. exact Ed'.
+Qed.
+
+Lemma make_fun_ctx_and_bound_map {C: VyperConfig} {Decl Decl'}
+                                 {callset: Decl -> string_set}
+                                 {may_call_undeclared: bool}
+                                 {callset': Decl' -> string_set}
+                                 (f: Decl -> Decl')
+                                 (NoNewCalls: let _ := string_set_impl in
+                                              forall (d: Decl),
+                                                FSet.is_subset (callset' (f d)) (callset d) = true)
+                                 {cd:  generic_calldag callset  may_call_undeclared}
+                                 (fun_name: string):
+   make_fun_ctx_and_bound (calldag_map f NoNewCalls cd) fun_name
+    =
+   match make_fun_ctx_and_bound cd fun_name with
+   | Some (existT _ bound fc) => Some (existT _ bound (fun_ctx_map f NoNewCalls cd fc))
+   | None => None
+   end.
+Proof.
+assert (T := calldag_maybe_map_total f NoNewCalls cd).
+rewrite (make_fun_ctx_and_bound_ok _ _ T fun_name).
+destruct (make_fun_ctx_and_bound cd fun_name) as [(bound, fc)|]. 2:trivial.
+f_equal. f_equal.
+unfold fun_ctx_map. unfold fun_ctx_maybe_map.
+apply fun_ctx_eq. { trivial. }
+unfold cached_mapped_decl.
+unfold cached_maybe_mapped_decl.
+remember (fun E => (calldag_maybe_map_fun_ctx_fun_decl_helper (fun x : Decl => inr (f x))
+       (adapt_no_new_calls f NoNewCalls) T fc E)) as bad_l.
+clear Heqbad_l.
+remember (fun E => (calldag_map_fun_ctx_fun_decl_helper f NoNewCalls cd fc E)) as bad_r.
+clear Heqbad_r.
+destruct (cd_declmap (calldag_map f NoNewCalls cd) (Calldag.fun_name fc)). { trivial. }
+exfalso.
+now apply bad_l.
 Qed.

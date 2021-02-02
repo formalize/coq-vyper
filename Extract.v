@@ -2,6 +2,7 @@ From Coq Require Import ExtrOcamlBasic ExtrOcamlString.
 From Coq Require Import ExtrHaskellBasic ExtrHaskellString.
 From Vyper Require Import L10.AST Config Compile.
 From Vyper Require L10.ToString L30.AST.
+From Vyper.CheckArith Require Import Builtins.
 
 From Coq Require Import ZArith.
 Definition z_eqb := Z.eqb.
@@ -24,4 +25,5 @@ Extraction "haskell/Extracted.hs"
   sample_config
   l10_neg
   l10_decls_to_string
-  l30_decls_to_string.
+  l30_decls_to_string
+  builtin_names_std.
