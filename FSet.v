@@ -1,7 +1,7 @@
-From Coq Require Import Bool Setoid List NArith.
+From Coq Require Import Bool Setoid List NArith ZArith.
 From Coq Require ListSet.
 From Coq Require Import FSets.FSetAVL FSetFacts.
-From Coq Require String.
+From Coq Require String HexString.
 
 Require Import ListSet2 StringCmp.
 
@@ -867,3 +867,325 @@ subst. rewrite<- Heqfa. repeat rewrite Bool.andb_false_r. trivial.
 Qed.
 
 End SetUtils.
+
+Section SetInject.
+
+Context {A B: Type}
+        (EA: forall x y: A, {x = y} + {x <> y})
+        (EB: forall x y: B, {x = y} + {x <> y}) (SB: Type) (CB: class EB SB)
+        (inj: A -> B) (uninj: B -> A) (UninjInj: forall x: A, uninj (inj x) = x).
+
+Definition inj_t := { s: SB | forall x, has s x = true -> inj (uninj x) = x }.
+Definition SA := inj_t.
+
+Lemma inj_to_list_nodup (s: SA):
+  NoDup (map uninj (to_list (proj1_sig s))).
+Proof.
+assert (P := proj2_sig s). cbn in P.
+assert (W: map inj (map uninj (to_list (proj1_sig s))) = to_list (proj1_sig s)).
+{
+  rewrite map_map.
+  assert (Q: forall x : B, ListSet.set_mem EB x (to_list (proj1_sig s)) = true -> inj (uninj x) = x).
+  { intros. apply P. now rewrite has_to_list. }
+  remember (to_list (proj1_sig s)) as l. clear Heql P.
+  induction l. { easy. }
+  cbn. cbn in Q. assert (Qa := Q a). destruct (EB a a). 2:{ contradiction. }
+  rewrite (Qa eq_refl). f_equal. apply IHl.
+  intro b. assert (Qb := Q b). destruct (EB b a).
+  { intro. apply (Qb eq_refl). }
+  exact Qb.
+}
+assert (D := to_list_nodup (proj1_sig s)).
+rewrite<- W in D.
+apply NoDup_map_inv in D. exact D.
+Qed.
+
+Lemma inj_from_list_helper (l: list A) (x: B):
+  has (from_list (map inj l)) x = true -> inj (uninj x) = x.
+Proof.
+rewrite has_from_list.
+induction l. { easy. }
+cbn.
+destruct (EB x (inj a)). { subst x. now rewrite UninjInj. }
+apply IHl.
+Qed.
+
+Lemma inj_has_to_list (x: A) (s: SA):
+  has (proj1_sig s) (inj x) = ListSet.set_mem EA x (map uninj (to_list (proj1_sig s))).
+Proof.
+assert (P := proj2_sig s). cbn in P.
+rewrite (has_to_list (inj x) (proj1_sig s)).
+assert (Q: forall x : B, ListSet.set_mem EB x (to_list (proj1_sig s)) = true -> inj (uninj x) = x).
+{ intros. apply P. now rewrite has_to_list. }
+remember (to_list (proj1_sig s)) as l. clear Heql P.
+induction l. { easy. }
+cbn. destruct (EB (inj x) a).
+{ subst a. rewrite UninjInj. now destruct (EA x x). }
+destruct (EA x (uninj a)).
+{ subst x. assert (Qa := Q a). cbn in Qa. destruct (EB a a); tauto. }
+apply IHl. intro b.
+assert (Qb := Q b). cbn in Qb. destruct (EB b a); subst; tauto.
+Qed.
+
+Lemma inj_has_from_list (x: A) (l: list A):
+  has (from_list (map inj l)) (inj x) = ListSet.set_mem EA x l.
+Proof.
+rewrite has_from_list.
+induction l. { easy. }
+cbn.
+destruct (EA x a) as [EQA|NEA]. { subst x. now destruct EB. }
+destruct EB as [EQB|NEB]. 2:apply IHl.
+rewrite<- (UninjInj x) in NEA.
+rewrite<- (UninjInj a) in NEA.
+rewrite EQB in NEA.
+contradiction.
+Qed.
+
+Lemma inj_empty_helper (x: B):
+  has empty x = true -> inj (uninj x) = x.
+Proof.
+intro H.
+rewrite empty_ok in H.
+discriminate.
+Qed.
+
+Lemma inj_empty_to_list:
+  map uninj (to_list empty) = nil.
+Proof.
+now rewrite empty_to_list.
+Qed.
+
+Lemma inj_singleton_helper (x: A) (y: B):
+  has (singleton (inj x)) y = true -> inj (uninj y) = y.
+Proof.
+rewrite singleton_ok. intro. subst y. now rewrite UninjInj.
+Qed.
+
+Lemma inj_singleton_to_list (x: A):
+  map uninj (to_list (singleton (inj x))) = x :: nil.
+cbn.
+rewrite singleton_to_list. cbn. now rewrite UninjInj.
+Qed.
+
+Lemma inj_size_nat_to_list (s: SA):
+  size_nat (proj1_sig s) = length (map uninj (to_list (proj1_sig s))).
+Proof.
+rewrite size_nat_to_list.
+now rewrite map_length.
+Qed.
+
+Lemma inj_is_empty_to_list (s: SA):
+  is_empty (proj1_sig s) = true <-> map uninj (to_list (proj1_sig s)) = nil.
+Proof.
+rewrite is_empty_to_list.
+now destruct to_list.
+Qed.
+
+Lemma inj_size_ok (s: SA):
+  size (proj1_sig s) = N.of_nat (size_nat (proj1_sig s)).
+Proof.
+apply size_ok.
+Qed.
+
+Lemma inj_add_helper (s: SA) (x: A) (y: B):
+  has (add (proj1_sig s) (inj x)) y = true -> inj (uninj y) = y.
+Proof.
+assert (P := proj2_sig s). cbn in P.
+rewrite add_ok. destruct EB.
+{ subst y. now rewrite UninjInj. }
+apply P.
+Qed.
+
+Lemma inj_add_ok (s: SA) (x y : A):
+  has (add (proj1_sig s) (inj x)) (inj y) = (if EA x y then true else has (proj1_sig s) (inj y)).
+Proof.
+rewrite add_ok.
+destruct EA as [EQA|NEA], EB as [EQB|NEB]; subst; try easy.
+(* NEA, EQB *)
+rewrite<- (UninjInj x) in NEA.
+rewrite<- (UninjInj y) in NEA.
+rewrite EQB in NEA.
+contradiction.
+Qed.
+
+Lemma inj_remove_helper (s: SA) (x: A) (y: B):
+  has (remove (proj1_sig s) (inj x)) y = true -> inj (uninj y) = y.
+Proof.
+assert (P := proj2_sig s). cbn in P.
+rewrite remove_ok. destruct EB. { easy. }
+apply P.
+Qed.
+
+Lemma inj_remove_ok (s: SA) (x y : A):
+  has (remove (proj1_sig s) (inj x)) (inj y) = (if EA x y then false else has (proj1_sig s) (inj y)).
+Proof.
+rewrite remove_ok.
+destruct EA as [EQA|NEA], EB as [EQB|NEB]; subst; try easy.
+(* NEA, EQB *)
+rewrite<- (UninjInj x) in NEA.
+rewrite<- (UninjInj y) in NEA.
+rewrite EQB in NEA.
+contradiction.
+Qed.
+
+Lemma inj_union_helper (s1 s2: SA) (x: B):
+  has (union (proj1_sig s1) (proj1_sig s2)) x = true -> inj (uninj x) = x.
+Proof.
+assert (P := proj2_sig s1). cbn in P.
+assert (Q := proj2_sig s2). cbn in Q.
+rewrite union_ok. intro H. apply Bool.orb_prop in H.
+case H; clear H; intro H; [apply P | apply Q]; exact H.
+Qed.
+
+Lemma inj_union_ok (a b: SA) (x: A):
+  has (union (proj1_sig a) (proj1_sig b)) (inj x) = has (proj1_sig a) (inj x) || has (proj1_sig b) (inj x).
+Proof.
+now rewrite union_ok.
+Qed.
+
+Lemma inj_inter_helper (s1 s2: SA) (x: B):
+  has (inter (proj1_sig s1) (proj1_sig s2)) x = true -> inj (uninj x) = x.
+Proof.
+assert (P := proj2_sig s1). cbn in P.
+rewrite inter_ok. intro H. apply andb_prop in H.
+exact (P x (proj1 H)).
+Qed.
+
+Lemma inj_inter_ok (a b: SA) (x: A):
+  has (inter (proj1_sig a) (proj1_sig b)) (inj x) = has (proj1_sig a) (inj x) && has (proj1_sig b) (inj x).
+Proof.
+now rewrite inter_ok.
+Qed.
+
+Lemma inj_diff_helper (s1 s2: SA) (x: B):
+  has (diff (proj1_sig s1) (proj1_sig s2)) x = true -> inj (uninj x) = x.
+Proof.
+assert (P := proj2_sig s1). cbn in P.
+rewrite diff_ok. intro H. apply andb_prop in H.
+exact (P x (proj1 H)).
+Qed.
+
+Lemma inj_diff_ok (a b: SA) (x: A):
+  has (diff (proj1_sig a) (proj1_sig b)) (inj x) = has (proj1_sig a) (inj x) && negb (has (proj1_sig b) (inj x)).
+Proof.
+now rewrite diff_ok.
+Qed.
+
+Lemma inj_for_all_ok (s : SA) (p : A -> bool):
+  for_all (proj1_sig s) (fun x : B => p (uninj x)) = true 
+   <->
+  (forall x : A, has (proj1_sig s) (inj x) = true -> p x = true).
+Proof.
+rewrite for_all_ok.
+split.
+{
+  intros H x T.
+  rewrite<- (UninjInj x).
+  apply (H (inj x) T).
+}
+intros H x T.
+apply (H (uninj x)).
+rewrite (proj2_sig s x T). exact T.
+Qed.
+
+Lemma inj_subset_ok (little big: SA):
+  is_subset (proj1_sig little) (proj1_sig big) = true
+   <->
+  (forall x : A, negb (has (proj1_sig little) (inj x)) || has (proj1_sig big) (inj x) = true).
+Proof.
+rewrite is_subset_ok.
+split.
+{ intros H x. apply (H (inj x)). }
+intros H x.
+assert (P := proj2_sig little x).
+assert (W := H (uninj x)).
+match goal with
+|- ?l = ?r => remember l as lhs; destruct lhs; trivial
+end.
+symmetry in Heqlhs. apply orb_false_elim in Heqlhs.
+destruct Heqlhs as (InLittle, NotInBig).
+apply negb_false_iff in InLittle.
+rewrite (P InLittle) in W.
+rewrite InLittle in W. rewrite NotInBig in W. apply W.
+Qed.
+
+Lemma inj_equal_ok (a b: SA):
+  equal (proj1_sig a) (proj1_sig b) = true 
+   <->
+  (forall x : A, has (proj1_sig a) (inj x) = has (proj1_sig b) (inj x)).
+Proof.
+rewrite equal_ok.
+split.
+{ intros H x. apply (H (inj x)). }
+intros H x.
+assert (P := proj2_sig a x).
+assert (Q := proj2_sig b x).
+assert (W := H (uninj x)).
+match goal with
+|- ?l = ?r => remember l as lhs; remember r as rhs;
+              symmetry in Heqlhs; symmetry in Heqrhs;
+              destruct lhs, rhs
+end; try easy;
+  try rewrite (P eq_refl) in W;
+  try rewrite (Q eq_refl) in W;
+  rewrite Heqlhs in W;
+  rewrite Heqrhs in W;
+  apply W.
+Qed.
+
+
+Definition inj_impl: class EA SA
+:= {| to_list s := map uninj (to_list (proj1_sig s))
+    ; to_list_nodup := inj_to_list_nodup
+    ; from_list l := exist _ (from_list (map inj l)) (inj_from_list_helper l)
+    ; has s x := has (proj1_sig s) (inj x)
+    ; has_to_list := inj_has_to_list
+    ; has_from_list := inj_has_from_list
+    ; empty := exist _ empty inj_empty_helper
+    ; empty_to_list := inj_empty_to_list
+    ; singleton x := exist _ (singleton (inj x)) (inj_singleton_helper x)
+    ; singleton_to_list := inj_singleton_to_list
+    ; size_nat s := size_nat (proj1_sig s)
+    ; size_nat_to_list := inj_size_nat_to_list
+    ; is_empty s := is_empty (proj1_sig s)
+    ; is_empty_to_list := inj_is_empty_to_list
+    ; size s := size (proj1_sig s)
+    ; size_ok := inj_size_ok
+    ; add s x := exist _ (add (proj1_sig s) (inj x)) (inj_add_helper s x)
+    ; add_ok := inj_add_ok
+    ; remove s x := exist _ (remove (proj1_sig s) (inj x)) (inj_remove_helper s x)
+    ; remove_ok := inj_remove_ok
+    ; union s1 s2 := exist _ (union (proj1_sig s1) (proj1_sig s2)) (inj_union_helper s1 s2)
+    ; union_ok := inj_union_ok
+    ; inter s1 s2 := exist _ (inter (proj1_sig s1) (proj1_sig s2)) (inj_inter_helper s1 s2)
+    ; inter_ok := inj_inter_ok
+    ; diff s1 s2 := exist _ (diff (proj1_sig s1) (proj1_sig s2)) (inj_diff_helper s1 s2)
+    ; diff_ok := inj_diff_ok
+    ; for_all s p := for_all (proj1_sig s) (fun x => p (uninj x))
+    ; for_all_ok := inj_for_all_ok
+    ; is_subset s1 s2 := is_subset (proj1_sig s1) (proj1_sig s2)
+    ; is_subset_ok := inj_subset_ok
+    ; equal s1 s2 := equal (proj1_sig s1) (proj1_sig s2)
+    ; equal_ok := inj_equal_ok
+   |}.
+
+End SetInject.
+
+(* This is a crude but convenient way to get N and Z sets
+   through storing the numbers as strings.
+ *)
+Definition N_set
+:= (SA String.string_dec string_avl_set string_avl_set_impl HexString.of_N HexString.to_N).
+Definition N_set_impl
+: class N.eq_dec N_set
+:= inj_impl N.eq_dec String.string_dec
+            string_avl_set string_avl_set_impl
+            HexString.of_N HexString.to_N HexString.to_N_of_N.
+
+Definition Z_set
+:= (SA String.string_dec string_avl_set string_avl_set_impl HexString.of_Z HexString.to_Z).
+Definition Z_set_impl
+: class Z.eq_dec Z_set
+:= inj_impl Z.eq_dec String.string_dec
+            string_avl_set string_avl_set_impl
+            HexString.of_Z HexString.to_Z HexString.to_Z_of_Z.
