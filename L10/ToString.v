@@ -68,7 +68,7 @@ Fixpoint string_of_expr {C: VyperConfig} (e: expr)
    end.
 
 
-Fixpoint string_of_small_stmt {C: VyperConfig} (ss: small_stmt)
+Definition string_of_small_stmt {C: VyperConfig} (ss: small_stmt)
 := match ss with
    | Pass => "pass"
    | Break => "break"

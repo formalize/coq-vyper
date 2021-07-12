@@ -44,21 +44,21 @@ tauto.
 Qed.
 
 Lemma uint63_ltb_Z (x y: uint63):
-  (x < y)%int63 = (to_Z x <? to_Z y)%Z.
+  (x <? y)%int63 = (to_Z x <? to_Z y)%Z.
 Proof.
 apply (relation_quad (fun x y => iff_refl _) Z.ltb_lt).
 apply ltb_spec.
 Qed.
 
 Lemma uint63_leb_Z (x y: uint63):
-  (x <= y)%int63 = (to_Z x <=? to_Z y)%Z.
+  (x <=? y)%int63 = (to_Z x <=? to_Z y)%Z.
 Proof.
 apply (relation_quad (fun x y => iff_refl _) Z.leb_le).
 apply leb_spec.
 Qed.
 
 Lemma uint63_ltb_N (x y: uint63):
-  (x < y)%int63 = (N_of_uint63 x <? N_of_uint63 y)%N.
+  (x <? y)%int63 = (N_of_uint63 x <? N_of_uint63 y)%N.
 Proof.
 rewrite uint63_ltb_Z.
 unfold N_of_uint63.
@@ -73,7 +73,7 @@ apply L.
 Qed.
 
 Lemma uint63_leb_N (x y: uint63):
-  (x <= y)%int63 = (N_of_uint63 x <=? N_of_uint63 y)%N.
+  (x <=? y)%int63 = (N_of_uint63 x <=? N_of_uint63 y)%N.
 Proof.
 rewrite uint63_leb_Z.
 unfold N_of_uint63.
@@ -88,7 +88,7 @@ apply L.
 Qed.
 
 Lemma uint63_get_high_digit (i k: uint63)
-                            (B: (63 <= k)%int63 = true):
+                            (B: (63 <=? k)%int63 = true):
   get_digit i k = false.
 Proof.
 unfold get_digit.
@@ -121,7 +121,7 @@ Qed.
 Lemma uint63_testbit_Z (i k: uint63):
   get_digit i k = Z.testbit (to_Z i) (to_Z k).
 Proof.
-remember (k < 63)%int63 as Low. symmetry in HeqLow.
+remember (k <? 63)%int63 as Low. symmetry in HeqLow.
 destruct Low.
 { 
   unfold get_digit.
@@ -260,5 +260,166 @@ replace (to_Z 1%int63) with 1%Z by trivial.
 apply Z.mod_small.
 assert (A := to_Z_bounded n).
 assert (P := uint63_to_Z_ne_0 n NZ).
+lia.
+Qed.
+
+(******************************************************************************************)
+
+Lemma head0_upper (n: int):
+  (to_Z (head0 n) <= 63)%Z.
+Proof.
+assert (Spec := head0_spec n).
+assert (Spec0 := head00_spec n).
+assert (Bound := to_Z_bounded n).
+assert (Cases0 := Zle_lt_or_eq _ _ (proj1 Bound)). (*  0 < n  \/  0 = n  *)
+case Cases0; clear Cases0.
+{
+  intro L. assert (B := proj2 (Spec L)).
+  unfold wB in B.
+  replace (Z.of_nat size) with 63%Z in B by trivial.
+  assert (F: (2 ^ φ (head0 n)%int63 < 2 ^ 63)%Z) by nia.
+  apply Z.pow_lt_mono_r_iff in F; lia.
+}
+intro E. symmetry in E. assert (G := Spec0 E).
+replace (to_Z digits) with 63%Z in G by trivial.
+lia.
+Qed.
+
+Lemma head0_zero (n: int):
+  to_Z (head0 n) = 63%Z <-> n = 0%int63.
+Proof.
+split. 2:{ intro. now subst. }
+intro E.
+assert (Spec := head0_spec n).
+assert (Spec0 := head00_spec n).
+assert (Bound := to_Z_bounded n).
+assert (Cases0 := Zle_lt_or_eq _ _ (proj1 Bound)). (*  0 < n  \/  0 = n  *)
+case Cases0; clear Cases0.
+{ (* shameless copy from head0_upper *)
+  intro L. assert (B := proj2 (Spec L)).
+  unfold wB in B.
+  replace (Z.of_nat size) with 63%Z in B by trivial.
+  assert (F: (2 ^ φ (head0 n)%int63 < 2 ^ 63)%Z) by nia.
+  apply Z.pow_lt_mono_r_iff in F; lia.
+}
+intro H.
+rewrite<- (of_to_Z n). now rewrite<- H.
+Qed.
+
+Lemma head0_single (n: int) (U: (n <? digits = true)%int63):
+  head0 (lsl 1 n) = (digits - 1 - n)%int63.
+Proof.
+assert (Spec := head0_spec (lsl 1 n)).
+assert (Q: to_Z (1 << n)%int63 = (2 ^ to_Z n)%Z).
+{
+  rewrite (lsl_spec 1 n).
+  replace (to_Z 1) with 1%Z by trivial.
+  rewrite Z.mul_1_l.
+  apply Z.mod_small_iff. { discriminate. }
+  left.
+  split. { now apply Z.pow_nonneg. }
+  apply Z.pow_lt_mono_r; try easy.
+  replace (Z.of_nat size) with (to_Z digits) by trivial.
+  apply ltb_spec. exact U.
+}
+rewrite Q in Spec. clear Q.
+assert (W: (0 < 2 ^ φ (n)%int63)%Z).
+{
+  apply Z.pow_pos_nonneg. { easy. }
+  apply to_Z_bounded.
+}
+apply Spec in W. clear Spec.
+rewrite<- Z.pow_add_r in W by apply to_Z_bounded.
+remember (to_Z (head0 (1 << n))%int63 + to_Z n)%Z as k.
+assert (K: k = 62%Z).
+{
+  subst.
+  assert (B: (0 <= to_Z (head0 (1 << n))%int63 + φ (n)%int63 < wB)%Z).
+  {
+    assert (H := head0_upper (1 << n)%int63).
+    assert (P: (to_Z n < 63)%Z).
+    {
+      rewrite ltb_spec in U.
+      apply U.
+    }
+    replace wB with (2^63)%Z by trivial.
+    assert (L := to_Z_bounded (head0 (1 << n))%int63).
+    assert (L' := to_Z_bounded n).
+    lia.
+  }
+  assert (R := Z.mod_small (to_Z (head0 (1 << n))%int63 + to_Z n) wB).
+  (* rewrite<- R in * by apply B doesn't work! *)
+  rewrite<- R in W by apply B.
+  rewrite<- R by apply B.
+  clear B R.
+  rewrite<- add_spec in *.
+  assert (X := to_Z_bounded (head0 (1 << n) + n)%int63).
+  remember (to_Z (head0 (1 << n) + n)%int63) as x.
+  clear Heqx.
+  replace (wB / 2)%Z with (2 ^ 62)%Z in W by trivial.
+  replace wB with (2 ^ 63)%Z in W by trivial.
+  destruct W as (A, B).
+  rewrite<- Z.pow_le_mono_r_iff in A by lia.
+  rewrite<- Z.pow_lt_mono_r_iff in B by lia.
+  lia.
+}
+rewrite K in Heqk. subst k. clear W.
+replace (digits - 1)%int63 with 62%int63 by trivial.
+rewrite<- of_to_Z. rewrite<- of_to_Z at 1. f_equal.
+assert (X := to_Z_bounded (head0 (1 << n))).
+assert (XU := head0_upper (1 << n)%int63).
+remember (to_Z (head0 (1 << n))) as x. clear Heqx.
+rewrite sub_spec. replace (to_Z 62) with 62%Z by trivial.
+rewrite ltb_spec in U.
+assert (Y := to_Z_bounded n).
+remember (to_Z n) as y. clear Heqy.
+cbn in U.
+rewrite Z.mod_small by lia.
+lia.
+Qed.
+
+(******************************************************************************************)
+
+(** This form of [tail0_spec] avoids [exists]. *)
+Lemma tail0_spec' (x: int) (NZ: (0 < to_Z x)%Z):
+  let y := Z.shiftr (to_Z x) (Z.succ (to_Z (tail0 x))) in
+  to_Z x = ((2 * y + 1) * 2 ^ (to_Z (tail0 x)))%Z.
+Proof.
+assert (Spec := tail0_spec x NZ).
+intro y. unfold y. clear y.
+destruct Spec as (y, (L, Spec)).
+rewrite Spec at 1. repeat f_equal.
+assert (P := to_Z_bounded (tail0 x)).
+remember (to_Z (tail0 x)) as p. clear Heqp.
+assert (X := to_Z_bounded x).
+remember (to_Z x) as n. clear Heqn. subst n.
+rewrite Z.shiftr_div_pow2 by lia.
+rewrite<- Z.add_1_l.
+rewrite Z.pow_add_r by lia.
+rewrite Z.div_mul_cancel_r by (apply pow2_nz; lia).
+replace (2 ^ 1)%Z with 2%Z by trivial.
+rewrite Z.mul_comm. rewrite Z.div_add_l by discriminate.
+cbn. lia.
+Qed.
+
+Lemma tail0_upper (n: int):
+  (to_Z (tail0 n) <= 63)%Z.
+Proof.
+assert (Spec := tail0_spec n).
+assert (Spec0 := tail00_spec n).
+assert (Bound := to_Z_bounded n).
+assert (Cases0 := Zle_lt_or_eq _ _ (proj1 Bound)). (*  0 < n  \/  0 = n  *)
+case Cases0; clear Cases0.
+{
+  intro L.
+  assert (B := Spec L). destruct B as (y, (Ly, B)).
+  rewrite B in Bound.
+  unfold wB in Bound.
+  replace (Z.of_nat size) with 63%Z in Bound by trivial.
+  assert (F: (2 ^ φ (tail0 n)%int63 < 2 ^ 63)%Z) by nia.
+  apply Z.pow_lt_mono_r_iff in F; lia.
+}
+intro E. symmetry in E. assert (G := Spec0 E).
+replace (to_Z digits) with 63%Z in G by trivial.
 lia.
 Qed.

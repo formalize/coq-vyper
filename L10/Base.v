@@ -23,7 +23,7 @@ Inductive abort {C: VyperConfig}
  | AbortReturnFromContract
  | AbortRevert.
 
-Fixpoint string_of_abort {C: VyperConfig} (a: abort)
+Definition string_of_abort {C: VyperConfig} (a: abort)
 := (match a with
     | AbortException n => "exception(" ++ HexString.of_Z (Z_of_uint256 n) ++ ")"
     | AbortBreak => "break"

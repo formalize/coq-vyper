@@ -292,7 +292,7 @@ Qed.
 
 Definition shr_uint63 (a: uint64) (sh: uint63)
 : uint64
-:= if (sh == 0)%int63
+:= if (sh =? 0)%int63
      then a
      else let (hi, lo) := a in
        (false, if hi
@@ -303,7 +303,7 @@ Lemma shr_uint63_ok (a: uint64) (sh: uint63):
   Z_of_uint64 (shr_uint63 a sh) = Z.shiftr (Z_of_uint64 a) (Int63.to_Z sh).
 Proof.
 unfold shr_uint63.
-remember ((sh == 0)%int63) as sh0 eqn:Sh0. symmetry in Sh0. destruct sh0.
+remember ((sh =? 0)%int63) as sh0 eqn:Sh0. symmetry in Sh0. destruct sh0.
 { rewrite Int63.eqb_spec in Sh0. now subst. }
 assert(BS := to_Z_bounded sh). remember (to_Z sh) as s.
 assert(SPos: 0 < s).
@@ -383,7 +383,7 @@ Qed.
 
 Definition shl_uint63 (a: uint64) (sh: uint63)
 : uint64
-:= if (sh == 0)%int63
+:= if (sh =? 0)%int63
      then a
      else let (hi, lo) := a in
        (get_digit lo (63 - sh), lsl lo sh).
@@ -393,7 +393,7 @@ Lemma shl_uint63_ok (a: uint64) (sh: uint63):
 Proof.
 repeat rewrite<- Z_of_uint64_alt. repeat rewrite<- Z_of_uint64_lor'_ok.
 unfold shl_uint63.
-remember ((sh == 0)%int63) as sh0 eqn:Sh0. symmetry in Sh0. destruct sh0.
+remember ((sh =? 0)%int63) as sh0 eqn:Sh0. symmetry in Sh0. destruct sh0.
 { 
   rewrite Int63.eqb_spec in Sh0. subst. rewrite Z.shiftl_0_r.
   symmetry. apply Z.mod_small.

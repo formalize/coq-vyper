@@ -376,10 +376,10 @@ f_equal.
 Qed.
 
 Definition nibble_of_uint63 (i: int)
-:= Nibble (0 < (i land 8))%int63
-          (0 < (i land 4))%int63
-          (0 < (i land 2))%int63
-          (0 < (i land 1))%int63.
+:= Nibble (0 <? (i land 8))%int63
+          (0 <? (i land 4))%int63
+          (0 <? (i land 2))%int63
+          (0 <? (i land 1))%int63.
 
 Definition uint63_of_nibble (n: nibble)
 := match n with
@@ -402,37 +402,37 @@ Qed.
 
 (** A direct conversion from a native int to a hex digit via an if cascade. *)
 Definition hex_digit_of_uint63 (i: int)
-:= if (0 < (i land 8))%int63 then
-     if (0 < (i land 4))%int63 then
-       if (0 < (i land 2))%int63 then
-         if (0 < (i land 1))%int63 then xF else xE
+:= if (0 <? (i land 8))%int63 then
+     if (0 <? (i land 4))%int63 then
+       if (0 <? (i land 2))%int63 then
+         if (0 <? (i land 1))%int63 then xF else xE
        else
-         if (0 < (i land 1))%int63 then xD else xC
+         if (0 <? (i land 1))%int63 then xD else xC
      else
-       if (0 < (i land 2))%int63 then
-         if (0 < (i land 1))%int63 then xB else xA
+       if (0 <? (i land 2))%int63 then
+         if (0 <? (i land 1))%int63 then xB else xA
        else
-         if (0 < (i land 1))%int63 then x9 else x8
+         if (0 <? (i land 1))%int63 then x9 else x8
    else
-     if (0 < (i land 4))%int63 then
-       if (0 < (i land 2))%int63 then
-         if (0 < (i land 1))%int63 then x7 else x6
+     if (0 <? (i land 4))%int63 then
+       if (0 <? (i land 2))%int63 then
+         if (0 <? (i land 1))%int63 then x7 else x6
        else
-         if (0 < (i land 1))%int63 then x5 else x4
+         if (0 <? (i land 1))%int63 then x5 else x4
      else
-       if (0 < (i land 2))%int63 then
-         if (0 < (i land 1))%int63 then x3 else x2
+       if (0 <? (i land 2))%int63 then
+         if (0 <? (i land 1))%int63 then x3 else x2
        else
-         if (0 < (i land 1))%int63 then x1 else x0.
+         if (0 <? (i land 1))%int63 then x1 else x0.
 
 Lemma hex_digit_of_nibble_of_uint63 (i: int):
   hex_digit_of_nibble (nibble_of_uint63 i) = hex_digit_of_uint63 i.
 Proof.
 unfold hex_digit_of_nibble. unfold nibble_of_uint63. unfold hex_digit_of_uint63.
-destruct (0 < i land 8)%int63;
-  destruct (0 < i land 4)%int63;
-  destruct (0 < i land 2)%int63;
-  destruct (0 < i land 1)%int63; easy.
+destruct (0 <? i land 8)%int63;
+  destruct (0 <? i land 4)%int63;
+  destruct (0 <? i land 2)%int63;
+  destruct (0 <? i land 1)%int63; easy.
 Qed.
 
 Lemma nibble_of_uint63_of_N (n: N):
@@ -558,14 +558,14 @@ destruct a3; destruct a2; destruct a1; destruct a0; trivial.
 Qed.
 
 Definition byte_of_int (i: int)
-:= Byte (0 < (i land 128))%int63
-        (0 < (i land 64))%int63
-        (0 < (i land 32))%int63
-        (0 < (i land 16))%int63
-        (0 < (i land 8))%int63
-        (0 < (i land 4))%int63
-        (0 < (i land 2))%int63
-        (0 < (i land 1))%int63.
+:= Byte (0 <? (i land 128))%int63
+        (0 <? (i land 64))%int63
+        (0 <? (i land 32))%int63
+        (0 <? (i land 16))%int63
+        (0 <? (i land 8))%int63
+        (0 <? (i land 4))%int63
+        (0 <? (i land 2))%int63
+        (0 <? (i land 1))%int63.
 
 Definition int_of_byte (b: byte)
 := match b with

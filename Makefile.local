@@ -1,3 +1,5 @@
+GHC=ghc -dynamic
+
 haskell/Lexer.hs: haskell/Lexer.x
 	alex --ghc haskell/Lexer.x
 
@@ -10,6 +12,6 @@ haskell/PatchedExtracted.hs: haskell/Extracted.hs
 	sh haskell/patch_extracted.sh
 
 haskell/coq-vyperc: haskell/*.hs haskell/Lexer.hs haskell/Parser.hs haskell/PatchedExtracted.hs
-	(cd haskell && ghc coq-vyperc.hs)
+	(cd haskell && ${GHC} coq-vyperc.hs)
 
 all: haskell/coq-vyperc

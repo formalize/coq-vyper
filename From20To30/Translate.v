@@ -275,7 +275,7 @@ Definition translate_decl {C: VyperConfig} (d: L20.AST.decl)
       end
    end.
 
-Fixpoint decl_names {C: VyperConfig} (decls: list L20.AST.decl)
+Definition decl_names {C: VyperConfig} (decls: list L20.AST.decl)
 := List.map L20.AST.decl_name decls.
 
 Definition decl_set {C: VyperConfig} (decls: list L20.AST.decl)

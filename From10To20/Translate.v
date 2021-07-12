@@ -39,7 +39,7 @@ Fixpoint translate_expr (e: L10.AST.expr)
    assert is translated to if
    augmented assignments are translated to usual ones
  *)
-Fixpoint translate_small_stmt (ss: L10.AST.small_stmt)
+Definition translate_small_stmt (ss: L10.AST.small_stmt)
 : L20.AST.stmt
 := match ss with
    | L10.AST.Pass => L20.AST.SmallStmt L20.AST.Pass
@@ -152,7 +152,7 @@ Definition translate_decl (d: L10.AST.decl)
 
 End Translate.
 
-Fixpoint decl_names {C: VyperConfig} (decls: list L10.AST.decl)
+Definition decl_names {C: VyperConfig} (decls: list L10.AST.decl)
 := List.map L10.AST.decl_name decls.
 
 Definition decl_set {C: VyperConfig} (decls: list L10.AST.decl)

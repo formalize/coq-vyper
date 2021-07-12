@@ -34,7 +34,7 @@ Fixpoint var_cap_stmt {C: VyperConfig} (s: stmt)
    | Semicolon a b => N.max (var_cap_stmt a) (var_cap_stmt b)
    end.
 
-Fixpoint var_cap_decl {C: VyperConfig} (d: decl)
+Definition var_cap_decl {C: VyperConfig} (d: decl)
 := match d with
    | StorageVarDecl _ => 0%N
    | FunDecl _ args_count body => N.max args_count (var_cap_stmt body)
