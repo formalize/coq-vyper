@@ -54,6 +54,7 @@ L30/Descend.v
 L30/Stmt.v
 L30/Interpret.v
 L30/VarCap.v
+L30/OpFree.v
 
 From20To30/Translate.v
 From20To30/FunCtx.v
@@ -68,14 +69,18 @@ CheckArith/Translate.v
 CheckArith/Stmt.v
 CheckArith/Call.v
 
+L40/AST.v
+L40/Callset.v
+L40/Descend.v
+L40/Expr.v
+L40/Stmt.v
+L40/Interpret.v
 
 Hash/UInt63.v
 Hash/UInt64.v
 Hash/Nibble.v
 Hash/Tuplevector.v
 Hash/Keccak.v
-
-# L40/AST.v
 
 Compile.v
 
