@@ -5,7 +5,7 @@ From Vyper.L20 Require Import AST Callset Descend Expr Stmt.
 
 (** Do constant folding in expressions.
    (We don't have const declarations yet,
-    once we do, thise will be somewhat more complicated.) *)
+    once we do, this will be somewhat more complicated.) *)
 Fixpoint const_fold_expr {C: VyperConfig} (e: expr)
 : string + expr
 := let fix const_fold_expr_list (l: list expr)
