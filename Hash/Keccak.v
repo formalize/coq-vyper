@@ -14,7 +14,7 @@ From Vyper Require Import Nibble.
 
 Local Open Scope string_scope.
 
-Definition rc_hex: list string
+Local Definition rc_hex: list string
 := "0x0000000000000001"
 :: "0x0000000000008082"
 :: "0x800000000000808A"
@@ -41,12 +41,12 @@ Definition rc_hex: list string
 :: "0x8000000080008008"
 :: nil.
 
-Definition rc := map UInt64.uint64_of_Z_mod (map HexString.to_Z rc_hex).
-Lemma rc_ok:
+Local Definition rc := map UInt64.uint64_of_Z_mod (map HexString.to_Z rc_hex).
+Local Lemma rc_ok:
   map UInt64.Z_of_uint64 rc = map HexString.to_Z rc_hex.
 Proof. trivial. Qed.
 
-Definition rc_quads_backwards := Tuplevector.gather rc 6 4 eq_refl.
+Local Definition rc_quads_backwards := Tuplevector.gather rc 6 4 eq_refl.
 
 Inductive vec25 (T: Type)
 := Vec25 (a0  a1  a2  a3  a4
@@ -63,7 +63,7 @@ Definition vec25_fill {T: Type} (x: T)
          x x x x x
          x x x x x.
 
-Definition uint64 := UInt64.uint64.
+Local Definition uint64 := UInt64.uint64.
 
 Definition vec25_zeros := vec25_fill (UInt64.uint64_0).
 
@@ -71,7 +71,7 @@ Section Permutation.
 
 Local Notation "x ^ y"  := (UInt64.bitwise_xor x y).
 
-Definition vec25_xor_tuple17_backwards (a: vec25 uint64) (b: Tuplevector.t uint64 17)
+Local Definition vec25_xor_tuple17_backwards (a: vec25 uint64) (b: Tuplevector.t uint64 17)
 := match a with
    | Vec25 a0  a1  a2  a3  a4
            a5  a6  a7  a8  a9
@@ -94,9 +94,9 @@ Local Notation "x | y"  := (UInt64.bitwise_or x y)  (at level 30). (* dangerous!
 Local Notation "x & y"  := (UInt64.bitwise_and x y) (at level 30).
 Local Notation "~ x"  := (UInt64.bitwise_not x).
 
-Definition rot x k := ((x << k) | (x >> (64 - k)%int63)).
+Local Definition rot x k := ((x << k) | (x >> (64 - k)%int63)).
 
-Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
+Local Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
 : vec25 uint64
 := match a, b with
    | Vec25 a0  a1  a2  a3  a4
@@ -189,7 +189,7 @@ Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
             z20 z21 z22 z23 z24
    end.
 
-Definition permute1 {T} (a: vec25 T)
+Local Definition permute1 {T} (a: vec25 T)
 := match a with
    | Vec25 a0  a1  a2  a3  a4
            a5  a6  a7  a8  a9
@@ -202,7 +202,7 @@ Definition permute1 {T} (a: vec25 T)
            a20 a6  a17 a3  a14
            a10 a21 a7  a18 a4
    end.
-Definition permute2 {T} (a: vec25 T)
+Local Definition permute2 {T} (a: vec25 T)
 := match a with
    | Vec25 a0  a1  a2  a3  a4
            a5  a6  a7  a8  a9
@@ -215,7 +215,7 @@ Definition permute2 {T} (a: vec25 T)
            a10 a1  a17 a8  a24
            a5  a21 a12 a3  a19
    end.
-Definition permute3 {T} (a: vec25 T)
+Local Definition permute3 {T} (a: vec25 T)
 := match a with
    | Vec25 a0  a1  a2  a3  a4
            a5  a6  a7  a8  a9
@@ -228,18 +228,18 @@ Definition permute3 {T} (a: vec25 T)
            a5  a11 a17 a23 a4
            a15 a21 a2  a8  a14
    end.
-Lemma permute1_of_permute3 {T} (a: vec25 T):
+Local Lemma permute1_of_permute3 {T} (a: vec25 T):
   permute1 (permute3 a) = a.
 Proof. now destruct a. Qed.
-Lemma permute3_of_permute1 {T} (a: vec25 T):
+Local Lemma permute3_of_permute1 {T} (a: vec25 T):
   permute3 (permute1 a) = a.
 Proof. now destruct a. Qed.
-Lemma permute2_of_permute2 {T} (a: vec25 T):
+Local Lemma permute2_of_permute2 {T} (a: vec25 T):
   permute2 (permute2 a) = a.
 Proof. now destruct a. Qed.
 
 
-Definition quad_round (a: vec25 uint64) (rcs: Tuplevector.t uint64 4)
+Local Definition quad_round (a: vec25 uint64) (rcs: Tuplevector.t uint64 4)
 : vec25 uint64
 := match rcs with
    | (rc4, rc3, rc2, rc1) =>
@@ -249,12 +249,12 @@ Definition quad_round (a: vec25 uint64) (rcs: Tuplevector.t uint64 4)
         round rc4 a3 a3
    end.
 
-Definition F1600 := fold_left quad_round rc_quads_backwards.
+Local Definition F1600 := fold_left quad_round rc_quads_backwards.
 
 End Permutation.
 
 (* Create padding of the given length (of the padding, not of the data). *)
-Definition padding (len: positive) (start: int) (* start is 1 for Ethereum's Keccak, otherwise 6 *)
+Local Definition padding (len: positive) (start: int) (* start is 1 for Ethereum's Keccak, otherwise 6 *)
 : list byte
 := match len with
    | 1%positive => byte_of_int (128 lor start)%int63 :: nil
@@ -263,7 +263,7 @@ Definition padding (len: positive) (start: int) (* start is 1 for Ethereum's Kec
    end.
 
 (* The padding has the requested length *)
-Lemma padding_ok (len: positive) (start: int):
+Local Lemma padding_ok (len: positive) (start: int):
   List.length (padding len start) = Pos.to_nat len.
 Proof.
 unfold padding.
@@ -285,7 +285,7 @@ Definition padding_length (data_length: N) (rate: positive)
    | Npos p => rate - p
    end.
 
-Lemma padding_length_ok (data_length: N) (rate: positive):
+Local Lemma padding_length_ok (data_length: N) (rate: positive):
   ((data_length + N.pos (padding_length data_length rate)) mod N.pos rate = 0)%N.
 Proof.
 unfold padding_length.
@@ -300,11 +300,11 @@ replace (N.pos p + N.pos (rate - p))%N with (N.pos rate) by lia.
 apply N.mod_same. discriminate.
 Qed.
 
-Definition pad (unpadded_data: list byte) (rate: positive) (start: int)
+Local Definition pad (unpadded_data: list byte) (rate: positive) (start: int)
 : list byte
 := (unpadded_data ++ padding (padding_length (N.of_nat (List.length unpadded_data)) rate) start)%list.
 
-Lemma pad_ok_mod (data: list byte) (rate: positive) (start: int):
+Local Lemma pad_ok_mod (data: list byte) (rate: positive) (start: int):
   (N.of_nat (List.length (pad data rate start)) mod N.pos rate = 0)%N.
 Proof.
 unfold pad. rewrite List.app_length. rewrite Nat2N.inj_add.
@@ -313,7 +313,7 @@ rewrite positive_nat_N. rewrite padding_length_ok.
 trivial.
 Qed.
 
-Lemma pad_ok (data: list byte) (rate: positive) (start: int):
+Local Lemma pad_ok (data: list byte) (rate: positive) (start: int):
   let d := List.length (pad data rate start) / Pos.to_nat rate in
     List.length (pad data rate start) = d * Pos.to_nat rate.
 Proof.
@@ -342,13 +342,13 @@ Proof.
 now rewrite<- Nat.mul_assoc.
 Qed.
 
-Definition pad_by_136_and_gather_into_uint64s (data: list byte) (padding_start: int)
+Local Definition pad_by_136_and_gather_into_uint64s (data: list byte) (padding_start: int)
 := let padded := pad data 136%positive padding_start in
    let PadOk  := pad_ok data 136%positive padding_start in
    List.map UInt64.uint64_of_be_bytes
             (Tuplevector.gather padded _ 8 (can_gather_by_8 _ PadOk)).
 
-Lemma pad_by_136_and_gather_into_uint64s_length (data: list byte) (s: int):
+Local Lemma pad_by_136_and_gather_into_uint64s_length (data: list byte) (s: int):
   List.length (pad_by_136_and_gather_into_uint64s data s) 
    =
   (List.length (pad data 136 s)) / 136 * 17.
@@ -360,17 +360,17 @@ apply (Tuplevector.gather_length (pad data 136 s)
              (can_gather_by_8 (Datatypes.length (pad data 136 s)) (pad_ok data 136 s))).
 Qed.
 
-Definition blocks (data: list byte) (padding_start: int)
+Local Definition blocks (data: list byte) (padding_start: int)
 := Tuplevector.gather (pad_by_136_and_gather_into_uint64s data padding_start)
                       _ 17
                       (pad_by_136_and_gather_into_uint64s_length data padding_start).
 
-Definition absorb (data: list byte) (padding_start: int)
+Local Definition absorb (data: list byte) (padding_start: int)
 := fold_left (fun state block => F1600 (vec25_xor_tuple17_backwards state block))
              (blocks data padding_start)
              vec25_zeros.
 
-Definition squeeze_256 (a: vec25 uint64) 
+Local Definition squeeze_256 (a: vec25 uint64) 
 := match a with
    | Vec25 a0  a1  a2  a3  _
            _   _   _   _   _
@@ -382,13 +382,41 @@ Definition squeeze_256 (a: vec25 uint64)
       in fold_right Tuplevector.app_to_list nil eights
    end.
 
+Local Lemma squeeze_256_length a:
+  List.length (squeeze_256 a) = 32.
+Proof.
+now destruct a.
+Qed.
+
 Definition keccak_256 (data: list byte): list byte := squeeze_256 (absorb data 1).
 Definition sha3_256   (data: list byte): list byte := squeeze_256 (absorb data 6).
+
+Lemma keccak_256_length (data: list byte):
+  List.length (keccak_256 data) = 32.
+Proof.
+unfold keccak_256. apply squeeze_256_length.
+Qed.
+Lemma sha3_256_length (data: list byte):
+  List.length (sha3_256 data) = 32.
+Proof.
+unfold sha3_256. apply squeeze_256_length.
+Qed.
 
 Definition keccak_256_of_string (s: String.string)
 := keccak_256 (bytes_of_string s).
 Definition sha3_256_of_string (s: String.string)
 := sha3_256 (bytes_of_string s).
+
+Lemma keccak_256_of_string_length (s: String.string):
+  List.length (keccak_256_of_string s) = 32.
+Proof.
+unfold keccak_256_of_string. apply keccak_256_length.
+Qed.
+Lemma sha3_256_of_string_length (s: String.string):
+  List.length (sha3_256_of_string s) = 32.
+Proof.
+unfold sha3_256_of_string. apply sha3_256_length.
+Qed.
 
 Definition keccak_256_hex (data: list byte)
 : String.string
@@ -405,14 +433,14 @@ Definition sha3_256_hex_of_string (s: String.string)
 := hex_of_bytes (sha3_256_of_string s) true.
 
 (* This test is from Go's sha3_test.go. *)
-Example keccak_256_smoke_test:
+Local Example keccak_256_smoke_test:
   keccak_256_hex_of_string "abc"
    =
   "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45".
 Proof. trivial. Qed.
 
 (* A byte-long test from XKCP's ShortMsgKAT_SHA3-256.txt. *)
-Example sha3_256_test_CC:
+Local Example sha3_256_test_CC:
   sha3_256_hex (byte_of_N (HexString.to_N "0xCC") :: nil) 
    = 
   "677035391cd3701293d385f037ba32796252bb7ce180b00b582dd9b20aaad7f0".
