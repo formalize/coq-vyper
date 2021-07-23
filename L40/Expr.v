@@ -45,17 +45,18 @@ Fixpoint interpret_expr {C: VyperConfig}
       := match e as e' return e = e' -> _ with
          | nil => fun _ => (world, ExprSuccess nil)
          | (h :: t)%list => fun E =>
-             let (world', result_h) := interpret_expr Ebound fc do_call builtins
-                                                      world loc loops h
-                                                      (callset_descend_head E CallOk)
-             in match result_h with
+             (* right-to-left evaluation order *)
+             let (world', result_t) := interpret_expr_list world loc t
+                                                           (callset_descend_tail E CallOk)
+             in match result_t with
                 | ExprAbort ab => (world', ExprAbort ab)
-                | ExprSuccess x =>
-                   let (world'', result_t) := interpret_expr_list world' loc t
-                                                                  (callset_descend_tail E CallOk)
-                   in (world'', match result_t with
-                                | ExprAbort _ => result_t
-                                | ExprSuccess y => ExprSuccess (x :: y)%list
+                | ExprSuccess values_t =>
+                   let (world'', result_h) := interpret_expr Ebound fc do_call builtins
+                                                             world' loc loops h
+                                                             (callset_descend_head E CallOk)
+                   in (world'', match result_h with
+                                | ExprAbort ab => ExprAbort ab
+                                | ExprSuccess value_h => ExprSuccess (value_h :: values_t)%list
                                 end)
                  end
          end eq_refl

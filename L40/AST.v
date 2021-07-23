@@ -3,7 +3,9 @@ From Coq Require Import List String NArith ZArith DecimalString HexString.
 From Vyper Require Import Config FSet.
 From Vyper Require L10.Base.
 
-(* The exprs are back! *)
+(** The exprs are back!
+  Note that L40 (like Yul) evaluates arguments right-to-left.
+ *)
 Inductive expr {C: VyperConfig}
 := Const (val: uint256)
  | LocalVar (index: N)
