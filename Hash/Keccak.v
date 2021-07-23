@@ -7,7 +7,6 @@ From Coq Require Import List.
 From Coq Require HexString.
 From Coq Require Import String.
 From Coq Require Import NArith ZArith Lia.
-From Coq Require Import Int63.
 
 From Vyper Require UInt64 Tuplevector.
 From Vyper Require Import Nibble.
@@ -88,13 +87,15 @@ Local Definition vec25_xor_tuple17_backwards (a: vec25 uint64) (b: Tuplevector.t
       end
    end.
 
-Local Notation "x << y" := (UInt64.shl_uint63 x y).
-Local Notation "x >> y" := (UInt64.shr_uint63 x y).
+Local Notation "x << y" := (UInt64.shl x y) (at level 30, no associativity).
+Local Notation "x >> y" := (UInt64.shr x y) (at level 30, no associativity).
 Local Notation "x | y"  := (UInt64.bitwise_or x y)  (at level 30). (* dangerous! messes up match! *)
 Local Notation "x & y"  := (UInt64.bitwise_and x y) (at level 30).
 Local Notation "~ x"  := (UInt64.bitwise_not x).
 
-Local Definition rot x k := ((x << k) | (x >> (64 - k)%int63)).
+
+(* here a - b = a + ~b + 1 *)
+Local Definition rot x k := ((x << k) | (x >> (UInt64.add (UInt64.uint64_of_Z_mod 65) (UInt64.bitwise_not k)))).
 
 Local Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
 : vec25 uint64
@@ -116,17 +117,17 @@ Local Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
       let bc3 := a3 ^ a8 ^ a13 ^ a18 ^ a23 in
       let bc4 := a4 ^ a9 ^ a14 ^ a19 ^ a24 in
 
-      let d0 := bc4 ^ rot bc1 1%int63 in
-      let d1 := bc0 ^ rot bc2 1%int63 in
-      let d2 := bc1 ^ rot bc3 1%int63 in
-      let d3 := bc2 ^ rot bc4 1%int63 in
-      let d4 := bc3 ^ rot bc0 1%int63 in
+      let d0 := bc4 ^ rot bc1 UInt64.uint64_1 in
+      let d1 := bc0 ^ rot bc2 UInt64.uint64_1 in
+      let d2 := bc1 ^ rot bc3 UInt64.uint64_1 in
+      let d3 := bc2 ^ rot bc4 UInt64.uint64_1 in
+      let d4 := bc3 ^ rot bc0 UInt64.uint64_1 in
 
       let p0 := b0 ^ d0 in
-      let p1 := rot (b1 ^ d1) 44%int63 in
-      let p2 := rot (b2 ^ d2) 43%int63 in
-      let p3 := rot (b3 ^ d3) 21%int63 in
-      let p4 := rot (b4 ^ d4) 14%int63 in
+      let p1 := rot (b1 ^ d1) (UInt64.uint64_of_Z_mod 44) in
+      let p2 := rot (b2 ^ d2) (UInt64.uint64_of_Z_mod 43) in
+      let p3 := rot (b3 ^ d3) (UInt64.uint64_of_Z_mod 21) in
+      let p4 := rot (b4 ^ d4) (UInt64.uint64_of_Z_mod 14) in
 
       let z0  := p0 ^ (p2 & ~ p1) ^ rc in
       let z1  := p1 ^ (p3 & ~ p2) in
@@ -134,11 +135,11 @@ Local Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
       let z3  := p3 ^ (p0 & ~ p4) in
       let z4  := p4 ^ (p1 & ~ p0) in
 
-      let q2 := rot (b5 ^ d0)  3%int63 in
-      let q3 := rot (b6 ^ d1) 45%int63 in
-      let q4 := rot (b7 ^ d2) 61%int63 in
-      let q0 := rot (b8 ^ d3) 28%int63 in
-      let q1 := rot (b9 ^ d4) 20%int63 in
+      let q2 := rot (b5 ^ d0) (UInt64.uint64_of_Z_mod 3) in
+      let q3 := rot (b6 ^ d1) (UInt64.uint64_of_Z_mod 45) in
+      let q4 := rot (b7 ^ d2) (UInt64.uint64_of_Z_mod 61) in
+      let q0 := rot (b8 ^ d3) (UInt64.uint64_of_Z_mod 28) in
+      let q1 := rot (b9 ^ d4) (UInt64.uint64_of_Z_mod 20) in
 
       let z5  := q0 ^ (q2 & ~ q1) in
       let z6  := q1 ^ (q3 & ~ q2) in
@@ -146,11 +147,11 @@ Local Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
       let z8  := q3 ^ (q0 & ~ q4) in
       let z9  := q4 ^ (q1 & ~ q0) in
 
-      let r4 := rot (b10 ^ d0) 18%int63 in
-      let r0 := rot (b11 ^ d1)  1%int63 in
-      let r1 := rot (b12 ^ d2)  6%int63 in
-      let r2 := rot (b13 ^ d3) 25%int63 in
-      let r3 := rot (b14 ^ d4)  8%int63 in
+      let r4 := rot (b10 ^ d0) (UInt64.uint64_of_Z_mod 18) in
+      let r0 := rot (b11 ^ d1) UInt64.uint64_1 in
+      let r1 := rot (b12 ^ d2) (UInt64.uint64_of_Z_mod 6) in
+      let r2 := rot (b13 ^ d3) (UInt64.uint64_of_Z_mod 25) in
+      let r3 := rot (b14 ^ d4) UInt64.uint64_8 in
 
       let z10 := r0 ^ (r2 & ~ r1) in
       let z11 := r1 ^ (r3 & ~ r2) in
@@ -158,11 +159,11 @@ Local Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
       let z13 := r3 ^ (r0 & ~ r4) in
       let z14 := r4 ^ (r1 & ~ r0) in
 
-      let s1 := rot (b15 ^ d0) 36%int63 in
-      let s2 := rot (b16 ^ d1) 10%int63 in
-      let s3 := rot (b17 ^ d2) 15%int63 in
-      let s4 := rot (b18 ^ d3) 56%int63 in
-      let s0 := rot (b19 ^ d4) 27%int63 in
+      let s1 := rot (b15 ^ d0) (UInt64.uint64_of_Z_mod 36) in
+      let s2 := rot (b16 ^ d1) (UInt64.uint64_of_Z_mod 10) in
+      let s3 := rot (b17 ^ d2) (UInt64.uint64_of_Z_mod 15) in
+      let s4 := rot (b18 ^ d3) UInt64.uint64_56 in
+      let s0 := rot (b19 ^ d4) (UInt64.uint64_of_Z_mod 27) in
 
       let z15 := s0 ^ (s2 & ~ s1) in
       let z16 := s1 ^ (s3 & ~ s2) in
@@ -170,11 +171,11 @@ Local Definition round (rc: uint64) (a: vec25 uint64) (b: vec25 uint64)
       let z18 := s3 ^ (s0 & ~ s4) in
       let z19 := s4 ^ (s1 & ~ s0) in
 
-      let t3 := rot (b20 ^ d0) 41%int63 in
-      let t4 := rot (b21 ^ d1)  2%int63 in
-      let t0 := rot (b22 ^ d2) 62%int63 in
-      let t1 := rot (b23 ^ d3) 55%int63 in
-      let t2 := rot (b24 ^ d4) 39%int63 in
+      let t3 := rot (b20 ^ d0) (UInt64.uint64_of_Z_mod 41) in
+      let t4 := rot (b21 ^ d1) UInt64.uint64_2 in
+      let t0 := rot (b22 ^ d2) (UInt64.uint64_of_Z_mod 62) in
+      let t1 := rot (b23 ^ d3) (UInt64.uint64_of_Z_mod 55) in
+      let t2 := rot (b24 ^ d4) (UInt64.uint64_of_Z_mod 39) in
 
       let z20 := t0 ^ (t2 & ~ t1) in
       let z21 := t1 ^ (t3 & ~ t2) in
@@ -254,22 +255,23 @@ Local Definition F1600 := fold_left quad_round rc_quads_backwards.
 End Permutation.
 
 (* Create padding of the given length (of the padding, not of the data). *)
-Local Definition padding (len: positive) (start: int) (* start is 1 for Ethereum's Keccak, otherwise 6 *)
+Local Definition padding (len: positive) (start: uint64) (* start is 1 for Ethereum's Keccak, otherwise 6 *)
 : list byte
 := match len with
-   | 1%positive => byte_of_int (128 lor start)%int63 :: nil
-   | _ => (byte_of_int start) :: repeat (byte_of_int 0) (N.to_nat (N.pos len - 2)) ++ 
-            byte_of_int 128 :: nil
+   | 1%positive => UInt64.byte_of_uint64 (UInt64.bitwise_or UInt64.uint64_128 start) :: nil
+   | _ => (UInt64.byte_of_uint64 start) ::
+             repeat (UInt64.byte_of_uint64 UInt64.uint64_0) (N.to_nat (N.pos len - 2)) ++
+                UInt64.byte_of_uint64 UInt64.uint64_128 :: nil
    end.
 
 (* The padding has the requested length *)
-Local Lemma padding_ok (len: positive) (start: int):
+Local Lemma padding_ok (len: positive) (start: uint64):
   List.length (padding len start) = Pos.to_nat len.
 Proof.
 unfold padding.
-remember (byte_of_int start :: 
-          repeat (byte_of_int 0) (N.to_nat (N.pos len - 2)) ++
-          byte_of_int 128 ::
+remember (UInt64.byte_of_uint64 start :: 
+          repeat (UInt64.byte_of_uint64 UInt64.uint64_0) (N.to_nat (N.pos len - 2)) ++
+          UInt64.byte_of_uint64 UInt64.uint64_128 ::
           nil) as l.
 assert (cons_length: forall {T} h (t: list T), List.length (h :: t) = S (List.length t)) by easy.
 destruct len; cbn; subst;
@@ -300,11 +302,11 @@ replace (N.pos p + N.pos (rate - p))%N with (N.pos rate) by lia.
 apply N.mod_same. discriminate.
 Qed.
 
-Local Definition pad (unpadded_data: list byte) (rate: positive) (start: int)
+Local Definition pad (unpadded_data: list byte) (rate: positive) (start: uint64)
 : list byte
 := (unpadded_data ++ padding (padding_length (N.of_nat (List.length unpadded_data)) rate) start)%list.
 
-Local Lemma pad_ok_mod (data: list byte) (rate: positive) (start: int):
+Local Lemma pad_ok_mod (data: list byte) (rate: positive) (start: uint64):
   (N.of_nat (List.length (pad data rate start)) mod N.pos rate = 0)%N.
 Proof.
 unfold pad. rewrite List.app_length. rewrite Nat2N.inj_add.
@@ -313,7 +315,7 @@ rewrite positive_nat_N. rewrite padding_length_ok.
 trivial.
 Qed.
 
-Local Lemma pad_ok (data: list byte) (rate: positive) (start: int):
+Local Lemma pad_ok (data: list byte) (rate: positive) (start: uint64):
   let d := List.length (pad data rate start) / Pos.to_nat rate in
     List.length (pad data rate start) = d * Pos.to_nat rate.
 Proof.
@@ -342,13 +344,13 @@ Proof.
 now rewrite<- Nat.mul_assoc.
 Qed.
 
-Local Definition pad_by_136_and_gather_into_uint64s (data: list byte) (padding_start: int)
+Local Definition pad_by_136_and_gather_into_uint64s (data: list byte) (padding_start: uint64)
 := let padded := pad data 136%positive padding_start in
    let PadOk  := pad_ok data 136%positive padding_start in
    List.map UInt64.uint64_of_be_bytes
             (Tuplevector.gather padded _ 8 (can_gather_by_8 _ PadOk)).
 
-Local Lemma pad_by_136_and_gather_into_uint64s_length (data: list byte) (s: int):
+Local Lemma pad_by_136_and_gather_into_uint64s_length (data: list byte) (s: uint64):
   List.length (pad_by_136_and_gather_into_uint64s data s) 
    =
   (List.length (pad data 136 s)) / 136 * 17.
@@ -360,12 +362,12 @@ apply (Tuplevector.gather_length (pad data 136 s)
              (can_gather_by_8 (Datatypes.length (pad data 136 s)) (pad_ok data 136 s))).
 Qed.
 
-Local Definition blocks (data: list byte) (padding_start: int)
+Local Definition blocks (data: list byte) (padding_start: uint64)
 := Tuplevector.gather (pad_by_136_and_gather_into_uint64s data padding_start)
                       _ 17
                       (pad_by_136_and_gather_into_uint64s_length data padding_start).
 
-Local Definition absorb (data: list byte) (padding_start: int)
+Local Definition absorb (data: list byte) (padding_start: uint64)
 := fold_left (fun state block => F1600 (vec25_xor_tuple17_backwards state block))
              (blocks data padding_start)
              vec25_zeros.
@@ -388,8 +390,8 @@ Proof.
 now destruct a.
 Qed.
 
-Definition keccak_256 (data: list byte): list byte := squeeze_256 (absorb data 1).
-Definition sha3_256   (data: list byte): list byte := squeeze_256 (absorb data 6).
+Definition keccak_256 (data: list byte): list byte := squeeze_256 (absorb data UInt64.uint64_1).
+Definition sha3_256   (data: list byte): list byte := squeeze_256 (absorb data (UInt64.uint64_of_Z_mod 6)).
 
 Lemma keccak_256_length (data: list byte):
   List.length (keccak_256 data) = 32.
@@ -418,6 +420,19 @@ Proof.
 unfold sha3_256_of_string. apply sha3_256_length.
 Qed.
 
+Local Fixpoint N_of_bytes_rec (start: N) (bytes: list byte)
+:= match bytes with
+   | nil => start
+   | (h :: t)%list => N_of_bytes_rec (N.shiftl start 8 + N_of_byte h) t
+   end.
+Definition N_of_bytes := N_of_bytes_rec 0.
+
+Definition keccak_256_N (data: list byte): N
+:= N_of_bytes (keccak_256 data).
+
+Definition keccak_256_N_of_string (s: String.string): N
+:= N_of_bytes (keccak_256_of_string s).
+
 Definition keccak_256_hex (data: list byte)
 : String.string
 := hex_of_bytes (keccak_256 data) true.
@@ -444,4 +459,9 @@ Local Example sha3_256_test_CC:
   sha3_256_hex (byte_of_N (HexString.to_N "0xCC") :: nil) 
    = 
   "677035391cd3701293d385f037ba32796252bb7ce180b00b582dd9b20aaad7f0".
+Proof. trivial. Qed.
+
+(* We won't prove this for everything. *)
+Example keccak_256_N_smoke_test:
+  HexString.to_N ("0x" ++ keccak_256_hex_of_string "foo") = keccak_256_N_of_string "foo".
 Proof. trivial. Qed.

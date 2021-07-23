@@ -231,6 +231,52 @@ Definition uint64_1: uint64 := (false, 1%int63).
 Lemma uint64_1_ok:
   Z_of_uint64 uint64_1 = 1.
 Proof. trivial. Qed.
+Definition uint64_2: uint64 := (false, 2%int63).
+Lemma uint64_2_ok:
+  Z_of_uint64 uint64_2 = 2.
+Proof. trivial. Qed.
+Definition uint64_4: uint64 := (false, 4%int63).
+Lemma uint64_4_ok:
+  Z_of_uint64 uint64_4 = 4.
+Proof. trivial. Qed.
+Definition uint64_8: uint64 := (false, 8%int63).
+Lemma uint64_8_ok:
+  Z_of_uint64 uint64_8 = 8.
+Proof. trivial. Qed.
+Definition uint64_16: uint64 := (false, 16%int63).
+Lemma uint64_16_ok:
+  Z_of_uint64 uint64_16 = 16.
+Proof. trivial. Qed.
+Definition uint64_32: uint64 := (false, 32%int63).
+Lemma uint64_32_ok:
+  Z_of_uint64 uint64_32 = 32.
+Proof. trivial. Qed.
+Definition uint64_64: uint64 := (false, 64%int63).
+Lemma uint64_64_ok:
+  Z_of_uint64 uint64_64 = 64.
+Proof. trivial. Qed.
+Definition uint64_128: uint64 := (false, 128%int63).
+Lemma uint64_128_ok:
+  Z_of_uint64 uint64_128 = 128.
+Proof. trivial. Qed.
+
+Definition uint64_24: uint64 := (false, 24%int63).
+Lemma uint64_24_ok:
+  Z_of_uint64 uint64_24 = 24.
+Proof. trivial. Qed.
+Definition uint64_40: uint64 := (false, 40%int63).
+Lemma uint64_40_ok:
+  Z_of_uint64 uint64_40 = 40.
+Proof. trivial. Qed.
+Definition uint64_48: uint64 := (false, 48%int63).
+Lemma uint64_48_ok:
+  Z_of_uint64 uint64_48 = 48.
+Proof. trivial. Qed.
+Definition uint64_56: uint64 := (false, 56%int63).
+Lemma uint64_56_ok:
+  Z_of_uint64 uint64_56 = 56.
+Proof. trivial. Qed.
+
 Definition uint64_max_value: uint64 := (true, max_int).
 Lemma uint64_max_value_ok:
   Z_of_uint64 uint64_max_value = 2^64 - 1.
@@ -379,6 +425,37 @@ apply Arith2.Z_land_pow2_small. { tauto. }
 now rewrite<- Z.leb_le.
 Qed.
 
+Definition shr (a: uint64) (sh: uint64)
+: uint64
+:= match sh with
+   | (false, sh63) => shr_uint63 a sh63
+   | (true, _) => uint64_0
+   end.
+
+Lemma shr_ok (a: uint64) (sh: uint64):
+  Z_of_uint64 (shr a sh) = Z.shiftr (Z_of_uint64 a) (Z_of_uint64 sh).
+Proof.
+destruct sh as (sh_hi, sh_lo).
+destruct sh_hi.
+2:{ (* low case *)
+  replace (shr a (false, sh_lo)) with (shr_uint63 a sh_lo) by trivial.
+  replace (Z_of_uint64 (false, sh_lo)) with (Int63.to_Z sh_lo) by trivial.
+  apply shr_uint63_ok.
+}
+(* high case *)
+match goal with |- ?lhs = ?rhs => replace lhs with 0 by trivial end.
+symmetry.
+rewrite Z.shiftr_div_pow2 by apply Z_of_uint64_lower.
+apply Z.div_small.
+split. { apply Z_of_uint64_lower. }
+refine (Z.lt_trans _ _ _ (Z_of_uint64_upper a) _).
+apply Z.pow_lt_mono_r. { easy. } { apply Z_of_uint64_lower. }
+unfold Z_of_uint64.
+assert (B := to_Z_bounded sh_lo).
+unfold wB. remember (to_Z sh_lo) as x. clear Heqx.
+unfold size. lia.
+Qed.
+
 (*******************************************************************************)
 
 Definition shl_uint63 (a: uint64) (sh: uint63)
@@ -497,6 +574,40 @@ replace wB with (2^63) by trivial.
 apply Z.pow_lt_mono_r; try lia.
 apply Z.mod_pos_bound.
 trivial. apply Q.
+Qed.
+
+Definition shl (a: uint64) (sh: uint64)
+: uint64
+:= match sh with
+   | (false, sh63) => shl_uint63 a sh63
+   | (true, _) => uint64_0
+   end.
+
+Lemma shl_ok (a: uint64) (sh: uint64):
+  Z_of_uint64 (shl a sh) = Z.shiftl (Z_of_uint64 a) (Z_of_uint64 sh) mod 2 ^ 64.
+Proof.
+destruct sh as (sh_hi, sh_lo).
+destruct sh_hi.
+2:{ (* low case *)
+  replace (shl a (false, sh_lo)) with (shl_uint63 a sh_lo) by trivial.
+  replace (Z_of_uint64 (false, sh_lo)) with (Int63.to_Z sh_lo) by trivial.
+  apply shl_uint63_ok.
+}
+(* high case *)
+match goal with |- ?lhs = ?rhs => replace lhs with 0 by trivial end.
+symmetry.
+rewrite Z.shiftl_mul_pow2 by apply Z_of_uint64_lower.
+replace (Z_of_uint64 (true, sh_lo)) with (Int63.to_Z sh_lo + wB) by trivial.
+rewrite Z.pow_add_r. 2:{ apply Int63.to_Z_bounded. } 2:{ now unfold wB. }
+rewrite Z.mul_assoc.
+remember (Z_of_uint64 a * 2 ^ Int63.to_Z (sh_lo)%int63) as c. clear Heqc.
+unfold wB. unfold size. replace (Z.of_nat 63) with 63%Z by trivial.
+pose (k := 2 ^ 63 - 64).
+assert (PosK: k > 0) by easy.
+replace (2 ^ 63) with (k + 64) by lia.
+rewrite Z.pow_add_r by lia.
+rewrite Z.mul_assoc.
+apply Z.mod_mul. easy.
 Qed.
 
 (*******************************************************************************)
@@ -635,39 +746,143 @@ Qed.
 
 (*******************************************************************************)
 
+Definition eqb (a b: uint64)
+: bool
+:= let '(a_hi, a_lo) := a in
+   let '(b_hi, b_lo) := b in
+   (Bool.eqb a_hi b_hi && (a_lo =? b_lo))%bool%int63.
+
+Lemma eqb_true (a b: uint64):
+  eqb a b = true <-> a = b.
+Proof.
+unfold eqb. split; intro H.
+{
+  destruct a as (a_hi, a_lo), b as (b_hi, b_lo).
+  apply Bool.andb_true_iff in H.
+  destruct H as (Hi, Lo).
+  apply Bool.eqb_prop in Hi.
+  apply Int63.eqb_spec in Lo.
+  now subst.
+}
+subst b. destruct a.
+rewrite Bool.eqb_reflx.
+rewrite Bool.andb_true_l.
+apply Int63.eqb_spec. trivial.
+Qed.
+
+Definition is_nonzero (a: uint64)
+: bool
+:= let '(a_hi, a_lo) := a in
+   (a_hi || (0 <? a_lo)%int63)%bool.
+
+Lemma is_nonzero_via_eqb (a: uint64):
+  is_nonzero a = negb (eqb a uint64_0).
+Proof.
+destruct a as (hi, lo). cbn.
+destruct hi; cbn; trivial.
+apply Bool.eq_true_iff_eq.
+assert (B := proj1 (Int63.to_Z_bounded lo)).
+rewrite Int63.ltb_spec.
+assert (E := Int63.eqb_spec lo 0).
+replace (to_Z 0) with 0%Z by trivial.
+destruct (lo =? 0)%int63.
+{ assert (L := proj1 E eq_refl). now subst. }
+apply Z.le_lteq in B.
+enough (L: 0 <> φ (lo)%int63) by tauto.
+intro H. symmetry in H.
+rewrite<- (of_to_Z lo) in E.
+rewrite H in E.
+cbn in E.
+assert (Bad := proj2 E eq_refl). discriminate.
+Qed.
+
+Lemma is_nonzero_false (a: uint64):
+  is_nonzero a = false <-> a = uint64_0.
+Proof.
+rewrite is_nonzero_via_eqb. rewrite<- eqb_true.
+apply Bool.negb_false_iff.
+Qed.
+
+Lemma is_nonzero_true (a: uint64):
+  is_nonzero a = true <-> a <> uint64_0.
+Proof.
+remember (is_nonzero a) as nz; symmetry in Heqnz.
+destruct nz.
+{
+  enough (a <> uint64_0) by tauto.
+  intro H. now subst.
+}
+apply is_nonzero_false in Heqnz. now subst.
+Qed.
+
+(*******************************************************************************)
+
+Definition byte_of_uint64 (i: uint64)
+:= Byte (is_nonzero (bitwise_and i uint64_128))
+        (is_nonzero (bitwise_and i uint64_64))
+        (is_nonzero (bitwise_and i uint64_32))
+        (is_nonzero (bitwise_and i uint64_16))
+        (is_nonzero (bitwise_and i uint64_8))
+        (is_nonzero (bitwise_and i uint64_4))
+        (is_nonzero (bitwise_and i uint64_2))
+        (is_nonzero (bitwise_and i uint64_1)).
+
+Definition uint64_of_byte (b: byte)
+:= match b with
+   | Byte b7 b6 b5 b4 b3 b2 b1 b0 =>
+      let a7 := if b7 then uint64_128 else uint64_0 in
+      let a6 := if b6 then  bitwise_or uint64_64 a7 else a7 in
+      let a5 := if b5 then  bitwise_or uint64_32 a6 else a6 in
+      let a4 := if b4 then  bitwise_or uint64_16 a5 else a5 in
+      let a3 := if b3 then  bitwise_or  uint64_8 a4 else a4 in
+      let a2 := if b2 then  bitwise_or  uint64_4 a3 else a3 in
+      let a1 := if b1 then  bitwise_or  uint64_2 a2 else a2 in
+                if b0 then  bitwise_or  uint64_1 a1 else a1
+   end.
+
+Lemma byte_of_uint64_of_byte (b: byte):
+  byte_of_uint64 (uint64_of_byte b) = b.
+Proof.
+destruct b as (a7, a6, a5, a4, a3, a2, a1, a0).
+destruct a7; destruct a6; destruct a5; destruct a4;
+destruct a3; destruct a2; destruct a1; destruct a0; trivial.
+Qed.
+
+(*******************************************************************************)
+
 Definition uint64_of_be_bytes (b: byte * byte * byte * byte * byte * byte * byte * byte)
 : uint64
-:= match b with
-   | (b7, b6, b5, b4, b3, b2, b1, b0) =>
-       bitwise_or (shl_uint63 (false, int_of_byte b7) 56%int63)
-                  (false, ((int_of_byte b6 << 48) lor (int_of_byte b5 << 40) lor (int_of_byte b4 << 32)
-                       lor (int_of_byte b3 << 24) lor (int_of_byte b2 << 16) lor (int_of_byte b1 << 8)
-                       lor int_of_byte b0)%int63)
-   end.
+:= let '(b7, b6, b5, b4, b3, b2, b1, b0) := b in
+   let a7 :=                shl (uint64_of_byte b7) uint64_56  in
+   let a6 := bitwise_or a7 (shl (uint64_of_byte b6) uint64_48) in
+   let a5 := bitwise_or a6 (shl (uint64_of_byte b5) uint64_40) in
+   let a4 := bitwise_or a5 (shl (uint64_of_byte b4) uint64_32) in
+   let a3 := bitwise_or a4 (shl (uint64_of_byte b3) uint64_24) in
+   let a2 := bitwise_or a3 (shl (uint64_of_byte b2) uint64_16) in
+   let a1 := bitwise_or a2 (shl (uint64_of_byte b1) uint64_8)  in
+             bitwise_or a1 (uint64_of_byte b0).
 
 Definition uint64_to_be_bytes (a: uint64)
 : byte * byte * byte * byte * byte * byte * byte * byte
-:= let (f, i) := a in
-    (byte_of_int (snd (shr_uint63 a 56)),
-     byte_of_int (i >> 48),
-     byte_of_int (i >> 40),
-     byte_of_int (i >> 32),
-     byte_of_int (i >> 24),
-     byte_of_int (i >> 16),
-     byte_of_int (i >> 8),
-     byte_of_int i)%int63.
+:= (byte_of_uint64 (shr a uint64_56),
+    byte_of_uint64 (shr a uint64_48),
+    byte_of_uint64 (shr a uint64_40),
+    byte_of_uint64 (shr a uint64_32),
+    byte_of_uint64 (shr a uint64_24),
+    byte_of_uint64 (shr a uint64_16),
+    byte_of_uint64 (shr a uint64_8),
+    byte_of_uint64 a).
 
 Definition uint64_to_le_bytes (a: uint64)
 : byte * byte * byte * byte * byte * byte * byte * byte
-:= let (f, i) := a in
-    (byte_of_int i,
-     byte_of_int (i >> 8),
-     byte_of_int (i >> 16),
-     byte_of_int (i >> 24),
-     byte_of_int (i >> 32),
-     byte_of_int (i >> 40),
-     byte_of_int (i >> 48),
-     byte_of_int (snd (shr_uint63 a 56)))%int63.
+:= (byte_of_uint64 a,
+    byte_of_uint64 (shr a uint64_8),
+    byte_of_uint64 (shr a uint64_16),
+    byte_of_uint64 (shr a uint64_24),
+    byte_of_uint64 (shr a uint64_32),
+    byte_of_uint64 (shr a uint64_40),
+    byte_of_uint64 (shr a uint64_48),
+    byte_of_uint64 (shr a uint64_56)).
 
 
 (*******************************************************************************)
@@ -694,7 +909,7 @@ Definition head0_uint64 (a: uint64)
 Definition tail0 (a: uint64)
 : int
 := let (hi, lo) := a in
-   if eqb lo 0
+   if (lo =? 0)%int63
      then if hi then 63 else 64
      else tail0 lo.
 
@@ -715,7 +930,7 @@ Definition eq0 (a: uint64)
 := let (hi, lo) := a in
    if hi
      then false
-     else eqb lo 0%int63.
+     else (lo =? 0)%int63.
 
 Definition succ (a: uint64)
 : uint64

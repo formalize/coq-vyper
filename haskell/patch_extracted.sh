@@ -11,7 +11,9 @@
 #  *   import qualified Data.Char
 #  *)
 #
-# You got to be kidding me...
+# You've got to be kidding me...
+#
+# Also added Data.Word for extracting UInt64.
 
 cd $(dirname "$0")
-sed 's/^module Extracted where/module PatchedExtracted where\n\nimport qualified Data.Bits\nimport qualified Data.Char/' Extracted.hs >PatchedExtracted.hs
+sed 's/^module Extracted where/module PatchedExtracted where\n\nimport qualified Data.Bits\nimport qualified Data.Char\nimport qualified Data.Word/' Extracted.hs >PatchedExtracted.hs

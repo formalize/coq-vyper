@@ -18,9 +18,18 @@ Graph/Dirichlet.v
 Graph/LongestPath.v
 Graph/Depthmap.v
 
+Hash/UInt63.v
+Hash/Nibble.v
+Hash/UInt64.v
+Hash/ExtrHaskellUInt64.v
+Hash/Tuplevector.v
+Hash/Keccak.v
+
 Config.v
 NaryFun.v
 Calldag.v
+
+ProtoAST.v
 
 L10/AST.v
 L10/UInt256.v
@@ -76,11 +85,9 @@ L40/Expr.v
 L40/Stmt.v
 L40/Interpret.v
 
-Hash/UInt63.v
-Hash/UInt64.v
-Hash/Nibble.v
-Hash/Tuplevector.v
-Hash/Keccak.v
+L50/Types.v
+L50/AST.v
+# L50/Expr.v
 
 Compile.v
 

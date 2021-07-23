@@ -1,18 +1,22 @@
-From Coq Require Import ExtrOcamlBasic ExtrOcamlString.
-From Coq Require Import ExtrHaskellBasic ExtrHaskellString.
+From Coq Require Import ExtrHaskellBasic ExtrHaskellString ZArith.
 From Vyper Require Import L10.AST Config Compile.
 From Vyper Require L10.ToString L30.AST.
 From Vyper.CheckArith Require Import Builtins.
+From Vyper Require Import ProtoAST.
+From Vyper.Hash Require Import UInt64 ExtrHaskellUInt64.
 
-From Coq Require Import ZArith.
 Definition z_eqb := Z.eqb.
 Definition l10_neg := L10.AST.Neg.
 Definition l10_decls_to_string {C: VyperConfig} := L10.ToString.string_of_decls.
 Definition l30_decls_to_string {C: VyperConfig} := L30.AST.string_of_decls.
 
+
 Extraction Language Haskell.
 
+Extract Constant Int63.int => "()". (* we never use it anymore but Coq can't figure that out *)
+
 Extraction "haskell/Extracted.hs"
+  hex_of_Z
   L10.AST.BinopLt
   L10.AST.BinopGt
   L10.AST.BinopEq
