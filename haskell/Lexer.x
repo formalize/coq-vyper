@@ -53,6 +53,7 @@ $dec ("_" | $dec)*
 "^"   { \ p _ -> (p, Token.BitXor) }
 "<<"  { \ p _ -> (p, Token.LeftShift) }
 ">>"  { \ p _ -> (p, Token.RightShift) }
+"->"  { \ p _ -> (p, Token.Arrow) }
 
 "="   { \ p _ -> (p, Token.Assign) }
 "+="  { \ p _ -> (p, Token.AssignAdd) }

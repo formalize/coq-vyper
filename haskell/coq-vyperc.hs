@@ -1,11 +1,17 @@
+import Data.List (intercalate)
 import System.Environment (getArgs, getProgName)
 import System.FilePath (splitExtension)
 
 import Lexer (alexScanTokens)
 import Indent (addIndentsAndNewlines)
 import Parser (parse)
-import PatchedExtracted (compile, l10_decls_to_string, sample_config, builtin_names_std)
+import PatchedExtracted (compile,
+                         l10_decls_to_string, 
+                         sample_config, 
+                         builtin_names_std,
+                         Proto_ast(Build_proto_ast))
 import LexerUtils (recognizeKeywords)
+import EmbeddedBuiltinsTable (embeddedProtos)
 
 -- Split the command line parameters into options 
 -- (starting with '-' but not "-") and arguments.
@@ -13,8 +19,8 @@ import LexerUtils (recognizeKeywords)
 splitArgs :: [String] -> ([String], [String])
 splitArgs [] = ([], [])
 splitArgs ("--" : rest) = ([], rest)
-splitArgs (('-' : h : t) : rest) =
-    let (opts, args) = splitArgs rest in ((h : t) : opts, args)
+splitArgs (opt@('-' : h : t) : rest) =
+    let (opts, args) = splitArgs rest in (opt : opts, args)
 splitArgs (arg : rest) =
     let (opts, args) = splitArgs rest in (opts, arg : args)
 
@@ -51,11 +57,27 @@ compileFile path =
 compileFiles :: [String] -> IO ()
 compileFiles = mapM_ compileFile
 
+builtinToString :: Proto_ast -> String
+builtinToString (Build_proto_ast name inputs outputs) =
+    name ++ "(" ++ intercalate ", " inputs ++ ")" ++
+        case outputs of
+            [] -> ""
+            _ -> " -> " ++ intercalate ", " outputs
+
+dumpBuiltinsHelp = "    --dump-builtins\n\
+                   \        Print the table of built-in function prototypes.\n\
+                   \        If selected, this must be the only option."
+dumpBuiltins :: IO ()
+dumpBuiltins = mapM_ putStrLn $ map builtinToString embeddedProtos   
+
 printHelp :: IO ()
 printHelp = do
     progName <- getProgName
     putStrLn $ "Usage: " ++ progName ++ " input1.vy input2.vy ..."
     putStrLn "'.fe' extension is accepted as alternative to '.vy'"
+    putStrLn ""
+    putStrLn "Options:"
+    putStrLn dumpBuiltinsHelp
 
 main = do
     (opts, args) <- splitArgs <$> getArgs
@@ -64,4 +86,5 @@ main = do
             case args of
                 [] -> printHelp
                 _ -> compileFiles args
+        ["--dump-builtins"] -> dumpBuiltins
         _ -> printHelp

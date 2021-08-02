@@ -23,6 +23,8 @@ data Token = Name String  -- used to be named Ident but it's too similar to Inde
            | LeftShift  -- <<
            | RightShift -- >>
 
+           | Arrow -- ->
+
            | Assign -- =
            | AssignAdd -- +=
            | AssignSub -- -=
