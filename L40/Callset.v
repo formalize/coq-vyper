@@ -15,7 +15,7 @@ Fixpoint expr_callset (e: expr)
           | (h :: t)%list => union (expr_callset h) (expr_list_callset t)
           end
    in match e with
-      | Const _ | LocalVar _ | LoopOffset _ | LoopCursor _ => empty
+      | Const _ | LocalVar _ | LoopOffset | LoopCursor => empty
       | PrivateCall name args => add (expr_list_callset args) name
       | BuiltinCall name args => expr_list_callset args
       end.

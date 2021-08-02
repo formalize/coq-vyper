@@ -1,5 +1,6 @@
 From Coq Require Import String ZArith CyclicAxioms ZModulo.
-Require FSet Map OpenArray.
+From Vyper Require FSet Map OpenArray.
+From Vyper.Hash Require Import Keccak.
 
 Class VyperConfig := {
   string_set: Type;
@@ -16,6 +17,7 @@ Class VyperConfig := {
   storage_insert: world_state -> string -> uint256 -> world_state;
   memory: Type;
   memory_impl: OpenArray.class (uint256_of_Z 0%Z) memory;
+  string_hash: string -> uint256;
 }.
 
 Lemma two_to_256_ne_0: (2^256 <> 0)%Z.
@@ -47,6 +49,7 @@ Definition sample_config
       storage_insert := let _ := Map.string_avl_map_impl in Map.insert;
       memory := list Z;
       memory_impl := OpenArray.list_inst 0%Z;
+      string_hash := fun s => (Z.of_N (keccak_256_N_of_string s))%Z;
    |}.
 
 Definition zero256 {C: VyperConfig} := uint256_of_Z 0%Z.

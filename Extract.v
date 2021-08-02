@@ -30,4 +30,5 @@ Extraction "haskell/Extracted.hs"
   l10_neg
   l10_decls_to_string
   l30_decls_to_string
-  builtin_names_std.
+  builtin_names_std
+  proto_ast.

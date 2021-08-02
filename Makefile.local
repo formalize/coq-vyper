@@ -1,17 +1,22 @@
 GHC=ghc -dynamic
+ALEX=alex --ghc
+HAPPY=happy --ghc
 
 haskell/Lexer.hs: haskell/Lexer.x
-	alex --ghc haskell/Lexer.x
+	${ALEX} haskell/Lexer.x
 
 haskell/Parser.hs: haskell/Parser.y
-	happy --ghc haskell/Parser.y
+	${HAPPY} haskell/Parser.y
+
+haskell/BuiltinsParser.hs: haskell/BuiltinsParser.y
+	${HAPPY} haskell/BuiltinsParser.y
 
 haskell/Extracted.hs: Extract.vo Extract.vos Extract.glob
 
 haskell/PatchedExtracted.hs: haskell/Extracted.hs
 	sh haskell/patch_extracted.sh
 
-haskell/coq-vyperc: haskell/*.hs haskell/Lexer.hs haskell/Parser.hs haskell/PatchedExtracted.hs
+haskell/coq-vyperc: haskell/*.hs haskell/Lexer.hs haskell/Parser.hs haskell/PatchedExtracted.hs haskell/BuiltinsParser.hs
 	(cd haskell && ${GHC} coq-vyperc.hs)
 
-all: haskell/coq-vyperc
+real-all: haskell/coq-vyperc

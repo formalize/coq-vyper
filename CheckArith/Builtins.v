@@ -174,25 +174,29 @@ Record builtin_names_config := { builtin_name_uint256_add: string
                                ; builtin_name_uint256_eq: string
                                ; builtin_name_uint256_shl: string
                                ; builtin_name_uint256_shr: string
+                               ; builtin_name_sload: string
+                               ; builtin_name_sstore: string
                                }.
 
 Definition builtin_names_std
 : builtin_names_config
-:= {| builtin_name_uint256_add    := "uint256_add"
-    ; builtin_name_uint256_sub    := "uint256_sub"
-    ; builtin_name_uint256_mul    := "uint256_mul"
-    ; builtin_name_uint256_div    := "uint256_div"
-    ; builtin_name_uint256_mod    := "uint256_mod"
-    ; builtin_name_uint256_pow    := "uint256_exp" (* not pow! *)
-    ; builtin_name_uint256_not    := "uint256_not"
-    ; builtin_name_uint256_iszero := "uint256_iszero"
-    ; builtin_name_uint256_and    := "uint256_and"
-    ; builtin_name_uint256_or     := "uint256_or"
-    ; builtin_name_uint256_xor    := "uint256_xor"
-    ; builtin_name_uint256_lt     := "uint256_lt"
-    ; builtin_name_uint256_eq     := "uint256_eq"
-    ; builtin_name_uint256_shl    := "uint256_shl"
-    ; builtin_name_uint256_shr    := "uint256_shr"
+:= {| builtin_name_uint256_add    := "add"
+    ; builtin_name_uint256_sub    := "sub"
+    ; builtin_name_uint256_mul    := "mul"
+    ; builtin_name_uint256_div    := "div"
+    ; builtin_name_uint256_mod    := "mod"
+    ; builtin_name_uint256_pow    := "exp" (* not pow! *)
+    ; builtin_name_uint256_not    := "not"
+    ; builtin_name_uint256_iszero := "iszero"
+    ; builtin_name_uint256_and    := "and"
+    ; builtin_name_uint256_or     := "or"
+    ; builtin_name_uint256_xor    := "xor"
+    ; builtin_name_uint256_lt     := "lt"
+    ; builtin_name_uint256_eq     := "eq"
+    ; builtin_name_uint256_shl    := "shl"
+    ; builtin_name_uint256_shr    := "shr"
+    ; builtin_name_sload          := "sload"
+    ; builtin_name_sstore         := "sstore"
    |}.
 
 Definition BuiltinsSupportUnop {C: VyperConfig}

@@ -9,8 +9,8 @@ From Vyper Require L10.Base.
 Inductive expr {C: VyperConfig}
 := Const (val: uint256)
  | LocalVar (index: N)
- | LoopOffset (deBruijnIndex: N)
- | LoopCursor (deBruijnIndex: N)
+ | LoopOffset (* always innermost *)
+ | LoopCursor (* always innermost *)
  | PrivateCall (name: string) (args: list expr)
  | BuiltinCall (name: string) (args: list expr).
 
@@ -18,8 +18,8 @@ Fixpoint expr_ind' {C: VyperConfig}
                    (P: expr -> Prop)
                    (HConst: forall val, P (Const val))
                    (HLocalVar: forall name, P (LocalVar name))
-                   (HLoopStart: forall index, P (LoopOffset index))
-                   (HLoopCursor: forall index, P (LoopCursor index))
+                   (HLoopStart: P LoopOffset)
+                   (HLoopCursor: P LoopCursor)
                    (HPrivateCall: forall name args,
                         Forall P args -> P (PrivateCall name args))
                    (HBuiltinCall: forall name args,
@@ -37,8 +37,8 @@ Fixpoint expr_ind' {C: VyperConfig}
    in match e with
       | Const val => HConst val
       | LocalVar name => HLocalVar name
-      | LoopOffset index => HLoopStart index
-      | LoopCursor index => HLoopCursor index
+      | LoopOffset => HLoopStart
+      | LoopCursor => HLoopCursor
       | PrivateCall name args => HPrivateCall name args (expr_list_ind args)
       | BuiltinCall name args => HBuiltinCall name args (expr_list_ind args)
       end.

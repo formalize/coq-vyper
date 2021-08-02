@@ -65,17 +65,17 @@ Fixpoint interpret_expr {C: VyperConfig}
        | LocalVar index => fun _ =>
            let _ := memory_impl in
            (world, ExprSuccess (OpenArray.get loc index))
-       | LoopOffset index => fun _ =>
-           (world, match List.nth_error loops (N.to_nat index) with
-                   | Some loop =>  ExprSuccess (loop_offset loop)
-                   | None => expr_error "loop index higher than the nesting level"
+       | LoopOffset => fun _ =>
+           (world, match loops with
+                   | (loop :: _)%list =>  ExprSuccess (loop_offset loop)
+                   | nil => expr_error "loop index higher than the nesting level"
                    end)
-       | LoopCursor index => fun _ =>
-           (world, match List.nth_error loops (N.to_nat index) with
-                   | Some loop => 
+       | LoopCursor => fun _ =>
+           (world, match loops with
+                   | (loop :: _)%list => 
                       ExprSuccess (uint256_of_Z (Z_of_uint256 (loop_count loop) - 1 -
                                                    Z.of_nat (loop_countdown loop)))%Z
-                   | None => expr_error "loop index higher than the nesting level"
+                   | nil => expr_error "loop index higher than the nesting level"
                    end)
        | PrivateCall name args => fun E =>
            let (world', result_args) :=
