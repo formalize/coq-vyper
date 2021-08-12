@@ -330,5 +330,40 @@ Proof.
 descend ok.
 Qed.
 
+Lemma callset_descend_stmts_app_left {l a b: list stmt}
+                                     {allowed_calls: string_set}
+                                     (E: l = (a ++ b)%list)
+                                     (ok: let _ := string_set_impl in
+                                        FSet.is_subset (stmt_list_callset l) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_list_callset a) allowed_calls = true.
+Proof.
+subst. cbn in *.
+induction a as [|h]; cbn. { apply empty_subset. }
+cbn in ok.
+rewrite union_subset_and.
+apply andb_true_intro.
+rewrite union_subset_and in ok.
+apply Bool.andb_true_iff in ok.
+destruct ok as (OkH, OkAB).
+exact (conj OkH (IHa OkAB)).
+Qed.
+
+Lemma callset_descend_stmts_app_right {l a b: list stmt}
+                                      {allowed_calls: string_set}
+                                      (E: l = (a ++ b)%list)
+                                      (ok: let _ := string_set_impl in
+                                         FSet.is_subset (stmt_list_callset l) allowed_calls = true):
+  let _ := string_set_impl in
+  FSet.is_subset (stmt_list_callset b) allowed_calls = true.
+Proof.
+subst. cbn in *.
+induction a as [|h]; cbn. { rewrite app_nil_l in ok. exact ok. }
+cbn in ok.
+rewrite union_subset_and in ok.
+apply Bool.andb_true_iff in ok.
+destruct ok as (OkH, OkAB).
+exact (IHa OkAB).
+Qed.
 
 End Callset.

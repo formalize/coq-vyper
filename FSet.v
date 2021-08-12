@@ -575,6 +575,21 @@ rewrite has_to_list. rewrite is_empty_to_list in H.
 rewrite H. trivial.
 Qed.
 
+Lemma is_empty_true_iff (a: S):
+  is_empty a = true  <->  forall x, has a x = false.
+Proof.
+split. { apply is_empty_true. }
+intro H.
+rewrite is_empty_to_list.
+remember (to_list a) as l.
+destruct l as [|h]. { trivial. }
+assert (Hh := H h).
+rewrite has_to_list in Hh.
+rewrite<- Heql in Hh.
+cbn in Hh.
+now destruct (E h h).
+Qed.
+
 Lemma is_empty_false (a: S) (H: is_empty a = false):
   exists x: M,
     has a x = true.

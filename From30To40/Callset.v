@@ -23,17 +23,22 @@ Local Ltac rr
 (** After translation, the callsets are the same. *)
 Lemma callset_translate_small_stmt {C: VyperConfig}
                                    (B: Builtins.builtin_names_config)
+                                   (declmap: string_map L30.AST.decl)
                                    (ss: L30.AST.small_stmt)
                                    (l: list L40.AST.stmt)
-                                   (E: translate_small_stmt B ss = inr l)
+                                   (E: translate_small_stmt B declmap ss = inr l)
                                    (x: string):
   let _ := string_set_impl in
   FSet.has (L40.Callset.stmt_list_callset l) x
    =
   FSet.has (L30.Callset.small_stmt_callset ss) x.
 Proof.
-destruct ss; cbn in *; inversion E; subst; cbn; rr; try easy;
-  [ destruct string_dec; trivial | ];
+destruct ss; cbn in *;
+  inversion E; subst; cbn; rr; try easy;
+  try destruct map_lookup as [d | ];
+  try destruct d; try discriminate;
+  try inversion E; subst; cbn; rr; try easy;
+  try destruct string_dec;
   unfold Translate.var_range;
   remember (N.to_nat args_count) as k; clear Heqk;
   induction k; cbn; rr; trivial;
@@ -42,9 +47,10 @@ Qed.
 
 Lemma callset_translate_stmt {C: VyperConfig}
                              (B: Builtins.builtin_names_config)
+                             (declmap: string_map L30.AST.decl)
                              (s: L30.AST.stmt)
                              (l: list L40.AST.stmt)
-                             (E: translate_stmt B s = inr l)
+                             (E: translate_stmt B declmap s = inr l)
                              (x: string):
   let _ := string_set_impl in
   FSet.has (L40.Callset.stmt_list_callset l) x
@@ -52,11 +58,11 @@ Lemma callset_translate_stmt {C: VyperConfig}
   FSet.has (L30.Callset.stmt_callset s) x.
 Proof.
 cbn. revert l E. induction s; intros; cbn; rr.
-{ (* small *) cbn in E. apply (callset_translate_small_stmt B). exact E. }
+{ (* small *) cbn in E. apply (callset_translate_small_stmt B declmap). exact E. }
 { (* if-else *)
   cbn in E. rename s1 into yes. rename s2 into no.
-  destruct (translate_stmt B yes) as [err | yes']. { discriminate. }
-  destruct (translate_stmt B no) as [err | no']. { discriminate. }
+  destruct (translate_stmt B declmap yes) as [err | yes']. { discriminate. }
+  destruct (translate_stmt B declmap no) as [err | no']. { discriminate. }
   inversion E; subst; clear E.
   assert (IHyes := IHs1 yes' eq_refl). clear IHs1.
   assert (IHno := IHs2 no' eq_refl). clear IHs2.
@@ -69,30 +75,19 @@ cbn. revert l E. induction s; intros; cbn; rr.
   (* both "cbn in E" and "simpl in E" hang up *)
   unfold translate_stmt in E. fold translate_stmt in E.
   destruct (Z_of_uint256 count =? 0)%Z. { discriminate. }
-  destruct (translate_stmt B s) as [err | body]. { discriminate. }
+  destruct (translate_stmt B declmap s) as [err | body]. { discriminate. }
   assert (IHbody := IHs body eq_refl). clear IHs.
-  (* here "inversion E" hangs up but this remember helps *)
-  remember (AST.Switch
-         (AST.BuiltinCall (builtin_name_uint256_lt B)
-            (AST.LocalVar var :: AST.Const (uint256_of_Z (2 ^ 256 - Z_of_uint256 count + 1)) :: nil))
-         (AST.Case zero256
-            (AST.Block
-               (AST.SmallStmt
-                  (AST.Abort (AbortException (uint256_of_Z (Z_of_string "loop range overflows")))) :: nil))
-          :: nil)
-         (Some
-            (AST.Block
-               (AST.SmallStmt
-                  (AST.Assign var
-                     (AST.BuiltinCall (builtin_name_uint256_add B) (AST.LoopOffset :: AST.LoopCursor :: nil)))
-                :: body))) :: nil)%list as l'.
-  inversion E; subst; clear E.
+  (* here "inversion E" hangs up *)
+  assert (InvertInr: forall A B (x y: B) (H: @inr A B x = inr y),
+                       x = y)
+    by (intros; now inversion H).
+  apply InvertInr in E. subst.
   cbn. rr. apply IHbody.
 }
 (* semicolon *)
 cbn in E.
-destruct (translate_stmt B s1) as [err | t1]. { discriminate. }
-destruct (translate_stmt B s2) as [err | t2]. { discriminate. }
+destruct (translate_stmt B declmap s1) as [err | t1]. { discriminate. }
+destruct (translate_stmt B declmap s2) as [err | t2]. { discriminate. }
 inversion E; subst; clear E.
 unfold Callset.stmt_list_callset. rr.
 cbn. rr.

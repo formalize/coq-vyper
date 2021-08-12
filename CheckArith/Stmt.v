@@ -74,7 +74,7 @@ Ltac view2
 
 (* Convert a BuiltinsSupportBinop clause into BuiltinIsBinop;
    pass the arity check and rewrite the builtin call.
-   Example: open_binop builtin_name_uint256_add binop_add.
+   Example: do_binop builtin_name_uint256_add binop_add.
    Invoke after reducing the interpreted code to (builtins ...)
 *)
 Ltac do_binop selector newname
@@ -127,7 +127,7 @@ Ltac do_binop_nocbn selector newname
       clear CondOk
    end.
 
-(* example: open_unop builtin_name_uint256_not binop_not. *)
+(* example: do_unop builtin_name_uint256_not binop_not. *)
 Ltac do_unop selector newname
 := let op_name := fresh newname in
    let A := fresh "A" in
@@ -1228,14 +1228,12 @@ assert (CapRange: (0 <= cap < 2 ^ 256)%Z).
   cbn in Bad. discriminate.
 }
 
-assert (WeakMainLoopEq: 
-          cap = (cursor + Z_of_uint256 count - 1)%Z
-           \/
-          Z_of_uint256 count = 0%Z).
-{ left. subst cursor. exact Heqcap. }
+assert (MainLoopEq: 
+          cap = (cursor + Z_of_uint256 count - 1)%Z).
+{ subst cursor. exact Heqcap. }
 
 clear Heqcap Heqcursor Heqno_overflow.
-revert count world mem mem' Agree cursor WeakMainLoopEq CallOk' CallOk Heqcountdown.
+revert count world mem mem' Agree cursor MainLoopEq CallOk' CallOk Heqcountdown.
 induction countdown; intros. (* ----------- induction -------------*)
 {
   rewrite Heqinterpret_loop_rec'.
@@ -1288,14 +1286,6 @@ assert (CountOk: countdown = Z.to_nat (Z_of_uint256 count')).
   exact (Z.lt_trans _ _ _ (Z.lt_succ_diag_r (Z.of_nat countdown)) (proj2 R)).
 }
 
-(* strengthening WeakMainLoopEq *)
-assert (MainLoopEq: cap = (cursor + Z_of_uint256 count - 1)%Z).
-{
-  enough (Z_of_uint256 count <> 0%Z). { tauto. }
-  intro J. rewrite J in *.
-  cbn in Heqcountdown. discriminate.
-}
-
 assert (NextLoopEq: cap = (Z.succ cursor + Z_of_uint256 count' - 1)%Z).
 {
   rewrite MainLoopEq.
@@ -1306,11 +1296,8 @@ assert (NextLoopEq: cap = (Z.succ cursor + Z_of_uint256 count' - 1)%Z).
   lia.
 }
 
-assert (WeakNextLoopEq: (cap = Z.succ cursor + Z_of_uint256 count' - 1 \/ Z_of_uint256 count' = 0)%Z).
-{ left. apply NextLoopEq. }
-
 assert (IH := IHcountdown count' world1 loc1 loc1' Agree1 (Z.succ cursor)
-                          WeakNextLoopEq CallOk' CallOk CountOk).
+                          NextLoopEq CallOk' CallOk CountOk).
 
 assert (FixCallL:
          (@callset_descend_loop_body C (@Loop C var count' (@translate_stmt C B scratch s))

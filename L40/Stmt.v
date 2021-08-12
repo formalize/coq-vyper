@@ -85,6 +85,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                                  FSet.is_subset (stmt_callset s)
                                                 (decl_callset (fun_decl fc))
                                  = true)
+{struct s}
 : world_state * memory * stmt_result uint256
 := match s as s' return s = s' -> _ with
    | SmallStmt ss => fun E => interpret_small_stmt Ebound fc do_call builtins
@@ -122,6 +123,8 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                   end eq_refl) cases (callset_descend_cases E CallOk)
           end
    | Loop var count body => fun E =>
+              let _ := memory_impl in
+              let offset := OpenArray.get loc var in
               let fix do_loop (world: world_state)
                               (loc: memory)
                               (countdown: nat)
@@ -132,7 +135,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                      let '(world', loc', result)
                      := interpret_block Ebound fc do_call builtins
                                         world loc
-                                        ({| loop_offset := let _ := memory_impl in OpenArray.get loc var
+                                        ({| loop_offset := let _ := memory_impl in offset
                                           ; loop_count := count
                                           ; loop_countdown := k
                                          |} :: loops)%list
@@ -144,7 +147,7 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                         | _ => (world', loc', result)
                         end
                  end
-       in do_loop world loc (Z.to_nat (Z_of_uint256 count))
+              in do_loop world loc (Z.to_nat (Z_of_uint256 count))
    end eq_refl
 with interpret_block {bigger_call_depth_bound smaller_call_depth_bound: nat}
                      (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)

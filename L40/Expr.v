@@ -78,18 +78,19 @@ Fixpoint interpret_expr {C: VyperConfig}
                    | nil => expr_error "loop index higher than the nesting level"
                    end)
        | PrivateCall name args => fun E =>
-           let (world', result_args) :=
-             interpret_expr_list world loc args
-                                 (callset_descend_args E CallOk)
-           in match result_args with
-              | ExprAbort ab => (world', ExprAbort ab)
-              | ExprSuccess arg_values =>
-                  match fun_ctx_descend fc CallOk Ebound E with
-                  | None => (* can't resolve the function, maybe it's a builtin *)
-                            (world', expr_error "can't resolve function name")
-                  | Some new_fc => do_call new_fc world' arg_values
+           match fun_ctx_descend fc CallOk Ebound E with
+           | None => (* can't resolve the function, maybe it's a builtin *)
+                    (world, expr_error "can't resolve function name")
+           | Some new_fc =>
+               let (world', result_args) :=
+                 interpret_expr_list world loc args
+                                     (callset_descend_args E CallOk)
+               in match result_args with
+                  | ExprAbort ab => (world', ExprAbort ab)
+                  | ExprSuccess arg_values =>
+                       do_call new_fc world' arg_values
                   end
-              end
+           end
        | BuiltinCall name args => fun E =>
            let (world', result_args) :=
              interpret_expr_list world loc args

@@ -15,16 +15,17 @@ Local Open Scope list_scope.
 
 Fixpoint translate_decl_alist {C: VyperConfig}
                               (B: builtin_names_config)
+                              (declmap: string_map L30.AST.decl)
                               (decls: list (string * L30.AST.decl))
 : string + list (string * L40.AST.decl)
 := match decls with
    | nil => inr nil
-   | (_, L30.AST.StorageVarDecl _) :: rest => translate_decl_alist B rest
+   | (_, L30.AST.StorageVarDecl _) :: rest => translate_decl_alist B declmap rest
    | (name, L30.AST.FunDecl _ nargs body) :: rest =>
-        match translate_stmt B body with
+        match translate_stmt B declmap body with
         | inl err => inl err
         | inr body' =>
-            match translate_decl_alist B rest with
+            match translate_decl_alist B declmap rest with
             | inl err => inl err
             | inr rest' => inr ((name, L40.AST.FunDecl name nargs (L40.AST.Block body')) :: rest')
             end
@@ -33,9 +34,10 @@ Fixpoint translate_decl_alist {C: VyperConfig}
 
 Local Lemma translate_decl_alist_no_new_names {C: VyperConfig}
                                               (B: builtin_names_config)
+                                              (declmap: string_map L30.AST.decl)
                                               (decls: list (string * L30.AST.decl))
                                               (decls': list (string * L40.AST.decl))
-                                              (Ok: translate_decl_alist B decls = inr decls')
+                                              (Ok: translate_decl_alist B declmap decls = inr decls')
                                               (name: string):
   In name (map fst decls') -> In name (map fst decls).
 Proof.
@@ -44,8 +46,8 @@ revert decls' Ok. induction decls; intros decls' Ok H.
 destruct a as (n, d). cbn in *.
 destruct d.
 { (* storage var *) right. apply (IHdecls _ Ok H). }
-destruct (translate_stmt B body) as [err|body']. { discriminate. }
-remember (translate_decl_alist B decls) as t_decls.
+destruct (translate_stmt B declmap body) as [err|body']. { discriminate. }
+remember (translate_decl_alist B declmap decls) as t_decls.
 destruct t_decls as [err | t_decls]. { discriminate. }
 inversion Ok. subst. clear Ok.
 destruct H. { now left. }
@@ -54,15 +56,16 @@ Qed.
 
 Lemma translate_decl_alist_ok {C: VyperConfig}
                               (B: builtin_names_config)
+                              (declmap: string_map L30.AST.decl)
                               (decls: list (string * L30.AST.decl))
                               (DeclsNoDup: List.NoDup (List.map fst decls))
                               (decls': list (string * L40.AST.decl))
-                              (Ok: translate_decl_alist B decls = inr decls')
+                              (Ok: translate_decl_alist B declmap decls = inr decls')
                               (name: string):
   match Map.alist_lookup string_dec decls name with
   | None | Some (L30.AST.StorageVarDecl _) => Map.alist_lookup string_dec decls' name = None
   | Some (L30.AST.FunDecl _ nargs body) =>
-      match translate_stmt B body with
+      match translate_stmt B declmap body with
       | inl _ => False
       | inr body' => Map.alist_lookup string_dec decls' name =
                         Some (L40.AST.FunDecl name nargs (L40.AST.Block body'))
@@ -81,18 +84,18 @@ destruct (string_dec name key) as [E|NE].
     subst.
     apply Map.alist_lookup_not_in.
     intro Hkey.
-    now apply (translate_decl_alist_no_new_names B decls decls') in Hkey.
+    now apply (translate_decl_alist_no_new_names B declmap decls decls') in Hkey.
   }
-  destruct (translate_stmt B body) as [err|body']. { discriminate. }
-  remember (translate_decl_alist B decls) as t_decls.
+  destruct (translate_stmt B declmap body) as [err|body']. { discriminate. }
+  remember (translate_decl_alist B declmap decls) as t_decls.
   destruct t_decls. { discriminate. }
   inversion Ok. subst. clear Ok.
   cbn. now destruct string_dec.
 }
 destruct value.
 { (* storage var *) now apply IH. }
-destruct (translate_stmt B body). { discriminate. }
-remember (translate_decl_alist B decls) as t_decls.
+destruct (translate_stmt B declmap body). { discriminate. }
+remember (translate_decl_alist B declmap decls) as t_decls.
 destruct t_decls. { discriminate. }
 inversion Ok. subst. clear Ok.
 cbn. destruct (string_dec name key). { contradiction. }
@@ -101,11 +104,12 @@ Qed.
 
 Local Lemma translate_calldag_depthmap_ok {C: VyperConfig}
                                           (B: builtin_names_config)
+                                          (declmap: string_map L30.AST.decl)
                                           (name: string)
                                           (cd: L30.Descend.calldag)
                                           (d: list (string * L40.AST.decl)):
    let _ := string_map_impl in
-   forall E: translate_decl_alist B (Map.items (cd_decls cd)) = inr d,
+   forall E: translate_decl_alist B declmap (Map.items (cd_decls cd)) = inr d,
    match Map.lookup (Map.of_alist d) name with
    | Some decl =>
        match cd_depthmap cd name with
@@ -128,7 +132,7 @@ destruct m as [f|]. 2:{ trivial. }
 rewrite Map.of_alist_ok in Heqm.
 
 assert (D := cd_depthmap_ok cd name).
-assert (F := translate_decl_alist_ok B
+assert (F := translate_decl_alist_ok B declmap
                                      (Map.items (cd_decls cd))
                                      (Map.items_nodup (cd_decls cd))
                                      d E name).
@@ -139,22 +143,22 @@ rewrite FSet.for_all_ok. rewrite FSet.for_all_ok in D.
 intros x H.
 destruct d0; rewrite Heqm in F. { discriminate. }
 cbn in D.
-remember (translate_stmt B body) as body'. destruct body'. { contradiction. }
+remember (translate_stmt B declmap body) as body'. destruct body'. { contradiction. }
 inversion F. subst. clear F.
 cbn in H.
-rewrite (callset_translate_stmt B _ _ (eq_sym Heqbody')) in H.
+rewrite (callset_translate_stmt B declmap _ _ (eq_sym Heqbody')) in H.
 apply (D x H).
 Qed.
 
 Definition translate_calldag {C: VyperConfig} (B: builtin_names_config) (cd: L30.Descend.calldag)
 : string + L40.Descend.calldag
 := let _ := string_map_impl in
-   match translate_decl_alist B (Map.items (cd_decls cd)) as cd' return _ = cd' -> _ with
+   match translate_decl_alist B (cd_decls cd) (Map.items (cd_decls cd)) as cd' return _ = cd' -> _ with
    | inl err => fun _ => inl err
    | inr d => fun E => inr
      {| cd_decls := Map.of_alist d
       ; cd_depthmap := cd_depthmap cd
-      ; cd_depthmap_ok name := translate_calldag_depthmap_ok B name cd d E
+      ; cd_depthmap_ok name := translate_calldag_depthmap_ok B (cd_decls cd) name cd d E
      |}
    end eq_refl.
 
@@ -177,20 +181,20 @@ Section FunCtx1.
   destruct cd30.
   unfold translate_calldag in ok.
   cbn in *.
-  remember (fun d (E : translate_decl_alist B (Map.items cd_decls) = inr d) =>
+  remember (fun d (E : translate_decl_alist B cd_decls (Map.items cd_decls) = inr d) =>
          inr
            {|
              cd_decls := Map.of_alist d;
              cd_depthmap := cd_depthmap;
              cd_depthmap_ok :=
                fun name : string =>
-               translate_calldag_depthmap_ok B name
+               translate_calldag_depthmap_ok B cd_decls name
                  {|
                    cd_decls := cd_decls; cd_depthmap := cd_depthmap; cd_depthmap_ok := cd_depthmap_ok
                  |} d E
            |}) as good_branch.
   assert (K: forall (d40: list (string * L40.AST.decl))
-                    (E: translate_decl_alist B (Map.items cd_decls) = inr d40),
+                    (E: translate_decl_alist B cd_decls (Map.items cd_decls) = inr d40),
                good_branch d40 E = inr cd40
                 ->
                Calldag.cd_depthmap cd40 name = cd_depthmap name).
@@ -199,14 +203,14 @@ Section FunCtx1.
     inversion H. now subst.
   }
   clear Heqgood_branch.
-  destruct (translate_decl_alist B (Map.items cd_decls)) as [|d40]. { discriminate. }
+  destruct (translate_decl_alist B cd_decls (Map.items cd_decls)) as [|d40]. { discriminate. }
   apply (K d40 eq_refl ok).
   Qed.
 
   Lemma translate_fun_ctx_declmap (name: string):
     match cd_declmap cd30 name with
     | Some (L30.AST.FunDecl n nargs body) =>
-        Some (translate_stmt B body)
+        Some (translate_stmt B (cd_decls cd30) body)
     | _ => None
     end
      =
@@ -218,26 +222,26 @@ Section FunCtx1.
   destruct cd30.
   unfold translate_calldag in ok.
   cbn in *.
-  remember (fun d (E: translate_decl_alist B (Map.items cd_decls) = inr d) =>
+  remember (fun d (E: translate_decl_alist B cd_decls (Map.items cd_decls) = inr d) =>
          inr
            {|
              cd_decls := Map.of_alist d;
              cd_depthmap := cd_depthmap;
              cd_depthmap_ok :=
                fun name : string =>
-               translate_calldag_depthmap_ok B name
+               translate_calldag_depthmap_ok B cd_decls name
                  {|
                    cd_decls := cd_decls; cd_depthmap := cd_depthmap; cd_depthmap_ok := cd_depthmap_ok
                  |} d E
            |}) as good_branch.
   unfold cd_declmap. cbn.
   assert (K: forall (d40: list (string * L40.AST.decl))
-                    (E: translate_decl_alist B (Map.items cd_decls) = inr d40),
+                    (E: translate_decl_alist B cd_decls (Map.items cd_decls) = inr d40),
                good_branch d40 E = inr cd40
                 ->
                let _ := string_map_impl in
                match Map.lookup cd_decls name with
-               | Some (L30.AST.FunDecl _ _ body) => Some (translate_stmt B body)
+               | Some (L30.AST.FunDecl _ _ body) => Some (translate_stmt B cd_decls body)
                | _ => None
                end
                 =
@@ -250,17 +254,17 @@ Section FunCtx1.
     inversion H. subst.
     cbn.
     clear H ok.
-    assert (M := translate_decl_alist_ok B (Map.items (cd_decls))
+    assert (M := translate_decl_alist_ok B cd_decls (Map.items cd_decls)
                                          (Map.items_nodup _) _ E name).
     rewrite Map.of_alist_ok.
     rewrite<- Map.items_ok in M.
     destruct (Map.lookup cd_decls name). 2:{ now rewrite M. }
     destruct d. { now rewrite M. }
-    destruct (translate_stmt B body). { contradiction. }
+    destruct (translate_stmt B cd_decls body). { contradiction. }
     now rewrite M.
   }
   clear Heqgood_branch.
-  destruct (translate_decl_alist B (Map.items cd_decls)). { discriminate. }
+  destruct (translate_decl_alist B cd_decls (Map.items cd_decls)). { discriminate. }
   apply (K _ eq_refl ok).
   Qed.
 End FunCtx1.
