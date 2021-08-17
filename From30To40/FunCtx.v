@@ -209,7 +209,7 @@ Section FunCtx1.
 
   Lemma translate_fun_ctx_declmap (name: string):
     match cd_declmap cd30 name with
-    | Some (L30.AST.FunDecl n nargs body) =>
+    | Some (L30.AST.FunDecl _ _ body) =>
         Some (translate_stmt B (cd_decls cd30) body)
     | _ => None
     end
@@ -267,6 +267,69 @@ Section FunCtx1.
   destruct (translate_decl_alist B cd_decls (Map.items cd_decls)). { discriminate. }
   apply (K _ eq_refl ok).
   Qed.
+
+  Lemma translate_fun_ctx_declmap_stronger (name: string):
+    match cd_declmap cd30 name with
+    | Some (L30.AST.FunDecl _ arity body) =>
+        Some (name, arity, translate_stmt B (cd_decls cd30) body)
+    | _ => None
+    end
+     =
+    match cd_declmap cd40 name with
+    | Some (L40.AST.FunDecl name' arity (L40.AST.Block stmts)) =>
+        Some (name', arity, inr stmts)
+    | None => None
+    end.
+  Proof.
+  destruct cd30.
+  unfold translate_calldag in ok.
+  cbn in *.
+  remember (fun d (E: translate_decl_alist B cd_decls (Map.items cd_decls) = inr d) =>
+         inr
+           {|
+             cd_decls := Map.of_alist d;
+             cd_depthmap := cd_depthmap;
+             cd_depthmap_ok :=
+               fun name : string =>
+               translate_calldag_depthmap_ok B cd_decls name
+                 {|
+                   cd_decls := cd_decls; cd_depthmap := cd_depthmap; cd_depthmap_ok := cd_depthmap_ok
+                 |} d E
+           |}) as good_branch.
+  unfold cd_declmap. cbn.
+  assert (K: forall (d40: list (string * L40.AST.decl))
+                    (E: translate_decl_alist B cd_decls (Map.items cd_decls) = inr d40),
+               good_branch d40 E = inr cd40
+                ->
+               let _ := string_map_impl in
+               match Map.lookup cd_decls name with
+               | Some (L30.AST.FunDecl _ arity body) => Some (name, arity, translate_stmt B cd_decls body)
+               | _ => None
+               end
+                =
+               match Map.lookup (Calldag.cd_decls cd40) name with
+               | Some (AST.FunDecl name' arity (AST.Block stmts)) => Some (name', arity, inr stmts)
+               | None => None
+               end).
+  {
+    intros. subst.
+    inversion H. subst.
+    cbn.
+    clear H ok.
+    assert (M := translate_decl_alist_ok B cd_decls (Map.items cd_decls)
+                                         (Map.items_nodup _) _ E name).
+    rewrite Map.of_alist_ok.
+    rewrite<- Map.items_ok in M.
+    destruct (Map.lookup cd_decls name). 2:{ now rewrite M. }
+    destruct d. { now rewrite M. }
+    destruct (translate_stmt B cd_decls body). { contradiction. }
+    now rewrite M.
+  }
+  clear Heqgood_branch.
+  destruct (translate_decl_alist B cd_decls (Map.items cd_decls)). { discriminate. }
+  apply (K _ eq_refl ok).
+  Qed.
+
 End FunCtx1.
 
 Section FunCtx2.
