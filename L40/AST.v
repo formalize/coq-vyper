@@ -114,3 +114,51 @@ Fixpoint stmt_ind' {C: VyperConfig}
 
 Inductive decl {C: VyperConfig}
 := FunDecl (name: string) (args_count: N) (body: block).
+
+Fixpoint var_cap_expr {C: VyperConfig} (e: expr)
+: N
+:= let fix var_cap_expr_list {C: VyperConfig} (l: list expr) :=
+             match l with
+             | nil => 0%N
+             | h :: t => N.max (var_cap_expr h) (var_cap_expr_list t)
+             end
+   in match e with
+      | Const _ => 0%N
+      | LocalVar index => N.succ index
+      | LoopOffset => 0%N
+      | LoopCursor => 0%N
+      | PrivateCall _ args => var_cap_expr_list args
+      | BuiltinCall _ args => var_cap_expr_list args
+      end.
+
+Definition var_cap_small_stmt {C: VyperConfig} (ss: small_stmt)
+:= match ss with
+   | Abort _ => 0%N
+   | Return e | Raise e | ExprStmt e => var_cap_expr e
+   | Assign lhs rhs => N.max (N.succ lhs) (var_cap_expr rhs)
+   end.
+
+Fixpoint var_cap_stmt {C: VyperConfig} (s: stmt)
+:= match s with
+   | SmallStmt ss => var_cap_small_stmt ss
+   | Switch e cases default =>
+        let fix var_cap_cases (l: list case) :=
+                  match l with
+                  | nil => 0%N
+                  | (Case _ body) :: t => N.max (var_cap_block body) (var_cap_cases t)
+                  end
+        in let d := match default with
+                    | Some b => var_cap_block b
+                    | None => 0%N
+                    end
+        in N.max (var_cap_expr e) (N.max (var_cap_cases cases) d)
+  | Loop var _ body => N.max (N.succ var) (var_cap_block body)
+  end
+with var_cap_block  {C: VyperConfig} (b: block)
+:= let '(Block body) := b in
+   let fix var_cap_stmt_list (l: list stmt) :=
+            match l with
+            | nil => 0%N
+            | h :: t => N.max (var_cap_stmt h) (var_cap_stmt_list t)
+            end
+   in var_cap_stmt_list body.

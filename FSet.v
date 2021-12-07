@@ -498,6 +498,7 @@ destruct in_a; destruct in_b; cbn; trivial;
 split; intro Z; apply StringAVLSet.mem_1 in Z; rewrite Z in *; discriminate.
 Qed.
 
+(* 8.14: #[export] *)
 Instance string_avl_set_impl: class String.string_dec string_avl_set
 := {|
       to_list := StringAVLSet.elements;

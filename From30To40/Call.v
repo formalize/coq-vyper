@@ -1,7 +1,8 @@
 From Coq Require Import String ZArith NArith Lia PropExtensionality.
 
 
-From Vyper Require Import Config Builtins Calldag Logic2.
+From Vyper Require Import Config Calldag Logic2.
+From Vyper.CheckArith Require Import Builtins.
 From Vyper.L10 Require Import Base.
 From Vyper.L30 Require AST Callset Interpret.
 From Vyper.L40 Require AST Callset Interpret.

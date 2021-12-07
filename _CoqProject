@@ -11,6 +11,7 @@ Map.v
 MapSig.v
 OpenArray.v
 Array.v
+Range.v
 
 Graph/Path.v
 Graph/Cycle.v
@@ -91,9 +92,21 @@ From30To40/FunCtx.v
 From30To40/Stmt.v
 From30To40/Call.v
 
+L40Metered/Interpret.v
+L40Metered/Expr.v
+L40Metered/Stmt.v
+
 L50/Types.v
 L50/AST.v
-# L50/Expr.v
+L50/Builtins.v
+L50/DynError.v
+L50/LocalVars.v
+L50/Expr.v
+L50/Stmt.v
+L50/Call.v
+
+From40To50/Proto.v
+From40To50/Translate.v
 
 Compile.v
 
