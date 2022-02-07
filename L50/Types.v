@@ -194,6 +194,29 @@ Definition yul_value_of_uint256 {C: VyperConfig} (u: uint256) (t: yul_type)
                               else fun _ => None) eq_refl
    end eq_refl.
 
+Lemma yul_value_of_uint256_u256 {C: VyperConfig} (u: uint256):
+  yul_value_of_uint256 u U256 = Some (yul_uint256 u).
+Proof.
+simpl.
+assert (R := uint256_range u).
+unfold uint_max. unfold int_size_in_bits.
+assert (T: ((0 <=? Z_of_uint256 u)%Z && (Z_of_uint256 u <=? 2 ^ 256 - 1)%Z)%bool = true).
+{
+  apply andb_true_intro.
+  destruct R as (L, U).
+  split. { apply Z.leb_le. exact L. }
+  apply Z.leb_le.
+  rewrite Z.sub_1_r.
+  apply Z.lt_le_pred in U.
+  exact U.
+}
+rewrite Logic2.if_yes with (E := T).
+f_equal.
+unfold yul_uint256.
+f_equal.
+apply eq_proofs_unicity. decide equality.
+Qed.
+
 Lemma yul_value_of_uint256_of_yul_value {C: VyperConfig} (t: yul_type) (v: yul_value t):
   yul_value_of_uint256 (uint256_of_yul_value v) t = Some v.
 Proof.

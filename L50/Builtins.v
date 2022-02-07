@@ -9,23 +9,29 @@ From Vyper.L50 Require Import Types.
 Record yul_builtin {C: VyperConfig} := {
   b_input_types: list yul_type;
   b_output_types: list yul_type;
-  b_fun: world_state -> nary_fun uint256 (List.length b_input_types) (world_state * list uint256)
+  b_fun: world_state -> nary_fun uint256 (List.length b_input_types)
+                                         (world_state * expr_result (list uint256))
 }.
 
+Inductive mass_typecheck_result
+:= MassTypecheckOk
+ | MassTypecheckWrongType
+ | MassTypecheckWrongArity.
+
 Fixpoint mass_typecheck {C: VyperConfig} (values: list dynamic_value) (types: list yul_type)
-: bool
+: mass_typecheck_result
 := match values, types with
-   | nil, nil => true
+   | nil, nil => MassTypecheckOk
    | (existT _ t _) :: vtail, thead :: ttail =>
       if yul_type_eq_dec t thead
         then mass_typecheck vtail ttail
-        else false
-   | _, _ => false
+        else MassTypecheckWrongType
+   | _, _ => MassTypecheckWrongArity
    end.
 
 (* mass typecheck fails if the numbers of values and types mismatch *)
 Lemma mass_typecheck_length {C: VyperConfig} (values: list dynamic_value) (types: list yul_type)
-                            (H: mass_typecheck values types = true):
+                            (H: mass_typecheck values types = MassTypecheckOk):
   List.length values = List.length types.
 Proof.
 revert types H.
@@ -37,6 +43,50 @@ apply IHvalues.
 destruct vhead as (t, _).
 now destruct (yul_type_eq_dec t thead).
 Qed.
+
+(** Test if the list only has u256. *)
+Definition all_are_u256 (l: list yul_type)
+: bool
+:= List.forallb (fun x => if yul_type_eq_dec x U256 then true else false) l.
+
+Lemma all_are_u256_head (head: yul_type) (tail: list yul_type)
+                        (Ok: all_are_u256 (head :: tail) = true):
+  head = U256.
+Proof.
+unfold all_are_u256 in Ok.
+rewrite forallb_forall in Ok.
+rewrite<- Forall_forall in Ok.
+apply Forall_inv in Ok.
+now destruct (yul_type_eq_dec head U256) as [Y|N].
+Qed.
+
+Lemma all_are_u256_tail (head: yul_type) (tail: list yul_type)
+                        (Ok: all_are_u256 (head :: tail) = true):
+  all_are_u256 tail = true.
+Proof.
+unfold all_are_u256 in *.
+rewrite forallb_forall in *.
+rewrite<- Forall_forall in *.
+apply Forall_inv_tail in Ok.
+exact Ok.
+Qed.
+
+
+Lemma mass_typecheck_u256 {C: VyperConfig}
+                          (v: list uint256)
+                          (types: list yul_type)
+                          (Ok: all_are_u256 types = true):
+  mass_typecheck
+        (List.map (fun x: uint256 => existT _ U256 (yul_uint256 x)) v)
+        types
+   =
+  if List.length v =? List.length types then MassTypecheckOk else MassTypecheckWrongArity.
+Proof.
+revert types Ok. induction v as [|h]; intros; destruct types as [|htype]; try easy.
+assert (OkHead := all_are_u256_head _ _ Ok). subst htype.
+cbn. exact (IHv _ (all_are_u256_tail _ _ Ok)).
+Qed.
+
 
 Fixpoint mass_cast {C: VyperConfig} (values: list uint256) (types: list yul_type)
 : string + list dynamic_value
@@ -57,7 +107,7 @@ Fixpoint mass_cast {C: VyperConfig} (values: list uint256) (types: list yul_type
 Local Lemma call_builtin_helper {C: VyperConfig}
                                 (b: yul_builtin)
                                 (args: list dynamic_value)
-                                (E: mass_typecheck args (b_input_types b) = true):
+                                (E: mass_typecheck args (b_input_types b) = MassTypecheckOk):
   List.length (b_input_types b) <= List.length (List.map uint256_of_dynamic_value args).
 Proof.
 rewrite List.map_length.
@@ -69,13 +119,17 @@ Qed.
 
 Definition call_builtin {C: VyperConfig} (b: yul_builtin) (world: world_state) (args: list dynamic_value)
 : world_state * expr_result (list dynamic_value)
-:= (if mass_typecheck args (b_input_types b) as a return _ = a -> _
-     then fun E =>
+:= match mass_typecheck args (b_input_types b) as a return _ = a -> _ with
+   | MassTypecheckOk => fun E =>
           let args_u256 := List.map uint256_of_dynamic_value args in
-          let '((world', outputs_256), _) := nary_call (b_fun b world) args_u256
-                                                       (call_builtin_helper b args E)
-           in (world', match mass_cast outputs_256 (b_output_types b) with
+          match nary_call (b_fun b world) args_u256 (call_builtin_helper b args E) with
+          | ((world', ExprSuccess outputs_256), _) =>
+              (world', match mass_cast outputs_256 (b_output_types b) with
                        | inl err => expr_error err
                        | inr outputs => ExprSuccess outputs
                        end)
-     else fun _ => (world, expr_error "builtin argument type mismatch"%string)) eq_refl.
+          | ((world', ExprAbort ab), _) => (world', ExprAbort ab)
+          end
+  | MassTypecheckWrongType => fun _ => (world, expr_error "builtin argument type mismatch"%string)
+  | MassTypecheckWrongArity => fun _ => (world, expr_error "builtin with wrong arity"%string)
+  end eq_refl.

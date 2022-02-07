@@ -26,6 +26,8 @@ The compiler features a preliminary pass that decorates each function with a max
 
 - install the prerequisites: *alex happy ghc coq*
 
+- Coq 8.13 is required, 8.14 and later versions won't work until [https://github.com/coq/coq/issues/15067](this bug) is fixed.
+
 - do the usual:
 
 		./configure

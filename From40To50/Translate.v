@@ -14,6 +14,7 @@ Local Open Scope string_scope.
 Definition make_var_name (id: string) (index: N)
 := ("$$" ++ id ++ NilZero.string_of_uint (N.to_uint index))%string.
 
+
 (** Returns the resulting expression and the number of expected values. *)
 Fixpoint translate_expr {C: VyperConfig} (protos: string_map proto)
                         (e: L40.AST.expr) (loop_depth: N)
@@ -54,7 +55,10 @@ Fixpoint translate_expr {C: VyperConfig} (protos: string_map proto)
           | inr args' =>
               match Map.lookup protos name with
               | None => inl ("Unable to find a prototype for a builtin call: " ++ name)
-              | Some p => inr (L50.AST.FunCall name args', N.of_nat (length (p_outputs p)))
+              | Some p =>
+                  if proto_is_u256_only p
+                    then inr (L50.AST.FunCall name args', N.of_nat (length (p_outputs p)))
+                    else inl ("A builtin call is not u256-only: " ++ name)
               end
           end
       end.

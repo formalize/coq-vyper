@@ -1,6 +1,8 @@
 From Coq Require Import String NArith ZArith DecimalString List Lia.
 
-From Vyper Require Import Config.
+From Coq Require Import ProofIrrelevance.
+
+From Vyper Require Import Config Logic2.
 From Vyper.CheckArith Require Import Builtins.
 From Vyper.L10 Require Import Base.
 From Vyper.L40 Require AST.
@@ -9,8 +11,9 @@ From Vyper.L50 Require Import Types Expr.
 
 From Vyper.L40Metered Require Import Interpret.
 
-From Vyper.From40To50 Require Import Translate Proto.
+From Vyper.From40To50 Require Import Translate Proto Mangle.
 
+(** The content of local memory [m] is stored in local variables named $$var0, $$var1 etc. *)
 Definition LocalVarsAgree {C: VyperConfig} (m: memory) (loc: string_map dynamic_value) (cap: N)
 : Prop
 := let _ := memory_impl in
@@ -49,7 +52,10 @@ refine (local_vars_agree_weaken _ Ok).
 lia.
 Qed.
 
-(* L50 might have no value where L40 sees zero. *)
+(** Value agreement between L40 and L50.
+    [n]: expected length of [e50]
+    The tricky part here is that L50 might have no value where L40 sees zero. 
+ *)
 Definition ExprResultsAgree {C: VyperConfig}
                             (e40: expr_result uint256)
                             (e50: expr_result (list dynamic_value))
@@ -57,10 +63,28 @@ Definition ExprResultsAgree {C: VyperConfig}
 := match e40, e50 with
    | ExprAbort a40, ExprAbort a50               =>  a40 = a50
    | ExprSuccess v40, ExprSuccess nil           =>  Z_of_uint256 v40 = 0%Z /\ n = 0%N
-   | ExprSuccess v40, ExprSuccess (v50 :: nil)  =>  v40 = uint256_of_dynamic_value v50 /\ n = 1%N
+   | ExprSuccess v40, ExprSuccess (v50 :: nil)  =>  (* v40 = uint256_of_dynamic_value v50 *)
+                                                    v50 = (existT _ U256 (yul_uint256 v40)) /\ n = 1%N
    | _, _ => False
    end.
 
+
+(** Value agreement between L40 and L50, a variant with u256 list on the L50 side.
+    [n]: expected length of [e50]
+    The tricky part here is that L50 might have no value where L40 sees zero.
+ *)
+Definition ExprResultsAgree256 {C: VyperConfig}
+                               (e40: expr_result uint256)
+                               (e50: expr_result (list uint256))
+                               (n: N)
+:= match e40, e50 with
+   | ExprAbort a40, ExprAbort a50               =>  a40 = a50
+   | ExprSuccess v40, ExprSuccess nil           =>  Z_of_uint256 v40 = 0%Z /\ n = 0%N
+   | ExprSuccess v40, ExprSuccess (v50 :: nil)  =>  v40 = v50 /\ n = 1%N
+   | _, _ => False
+   end.
+
+(** Same as [ExprResultsAgree] but lifted to [world_state * option]. *)
 Definition ResultsAgree {C: VyperConfig}
                         (result40: world_state * option (expr_result uint256))
                         (result50: world_state * option (expr_result (list dynamic_value)))
@@ -75,6 +99,10 @@ Definition ResultsAgree {C: VyperConfig}
    | _, _ => False
    end.
 
+(** A variant of [ExprResultsAgree] with the L40's result being a list.
+    (a better name would be great)
+    This time the lists must correspond, no "void value equals 0" trickery here.
+ *)
 Definition ValueListsAgree {C: VyperConfig}
                            (result40: world_state * option (expr_result (list uint256)))
                            (result50: world_state * option (expr_result (list dynamic_value)))
@@ -86,7 +114,8 @@ Definition ValueListsAgree {C: VyperConfig}
    | Some (ExprAbort a40), Some (ExprAbort a50) =>
         a40 = a50
    | Some (ExprSuccess e40), Some (ExprSuccess e50) =>
-        e40 = map uint256_of_dynamic_value e50
+        (* e40 = map uint256_of_dynamic_value e50 *)
+        e50 = map (fun x => existT _ U256 (yul_uint256 x)) e40
    | None, None => True
    | _, _ => False
    end.
@@ -111,6 +140,7 @@ Definition get_cursor {C: VyperConfig} (loop: L40.Expr.loop_ctx)
 : uint256
 := uint256_of_Z (Z_of_uint256 (L40.Expr.loop_count loop) - 1 - Z.of_nat (L40.Expr.loop_countdown loop)).
 
+(** The L40 loop contexts agree with variables named $$cursor0 (outermost loop), $$cursor1 etc. *)
 Definition LoopCursorsAgree {C: VyperConfig}
                            (loop_info: list L40.Expr.loop_ctx)
                            (loc: string_map dynamic_value)
@@ -123,19 +153,62 @@ Definition LoopCursorsAgree {C: VyperConfig}
      | Some x => map_lookup loc (make_var_name "cursor" (N.of_nat k)) = Some (existT _ U256 (yul_uint256 x))
      end.
 
-Definition ProtosAgree {C: VyperConfig}
-                       (protos: string -> option proto)
-                       (builtins: string -> option L50.Builtins.yul_builtin)
-:= forall name,
-     match protos name, builtins name with
-     | None, None => True
-     | Some p, Some b => p_inputs p = L50.Builtins.b_input_types b 
-                          /\
-                         p_outputs p = L50.Builtins.b_output_types b
-     | _, _ => False
+
+Definition BuiltinsAgree {C: VyperConfig}
+                         (b40: builtin)
+                         (b50: L50.Builtins.yul_builtin)
+                         (B50InputsU256:   L50.Builtins.all_are_u256 (L50.Builtins.b_input_types  b50) = true)
+                         (B50OutputssU256: L50.Builtins.all_are_u256 (L50.Builtins.b_output_types b50) = true)
+:= let '(existT _ arity f40) := b40 in
+       arity = List.length (L50.Builtins.b_input_types b50)
+        /\
+       forall (world: world_state) (args: list uint256)
+              (LenOk40: arity =? List.length args = true)
+              (LenOk50: List.length (Builtins.b_input_types b50) = List.length args),
+         let (w40, e40) := (call_builtin args LenOk40 (f40 world)) in
+         let (w50, e50) := (call_builtin_u256 b50 world args LenOk50) in
+         w40 = w50  /\  ExprResultsAgree256 e40 e50 
+                                            (N.of_nat (List.length (L50.Builtins.b_output_types b50))).
+
+Definition AllBuiltinsAgreeIfU256 {C: VyperConfig}
+                                  (builtins40: string -> option builtin)
+                                  (builtins50: string -> option L50.Builtins.yul_builtin)
+:= forall name: string,
+     match builtins50 name with
+     | None => True
+     | Some b50 =>
+        (if L50.Builtins.all_are_u256 (L50.Builtins.b_input_types b50) as z return _ = z -> _
+         then 
+           fun i256 =>
+            (if L50.Builtins.all_are_u256 (L50.Builtins.b_output_types b50) as z return _ = z -> _
+              then fun o256 =>
+                   match builtins40 name with
+                   | None => False
+                   | Some b40 => BuiltinsAgree b40 b50 i256 o256
+                   end
+              else fun _ => True) eq_refl
+         else fun _ => True) eq_refl
      end.
 
-(*
+Lemma if_yes_prop cond yes no
+                  (E: cond = true):
+  (if cond as cond' return cond = cond' -> Prop
+     then yes
+     else no) eq_refl
+    =
+   yes E.
+Proof.
+assert (Irrel: forall E', yes E' = yes E).
+{
+  intro E'. f_equal.
+  apply Eqdep_dec.eq_proofs_unicity.
+  decide equality.
+}
+destruct cond. { apply Irrel. }
+discriminate.
+Qed.
+
+
 Lemma interpret_translated_expr {C: VyperConfig}
                                 {B: builtin_names_config}
                                 {protos: string_map proto}
@@ -160,7 +233,7 @@ Lemma interpret_translated_expr {C: VyperConfig}
                                                  (world: world_state)
                                                  (args40: list uint256)
                                                  (args50: list dynamic_value)
-                                                 (ArgsOk: args40 = map uint256_of_dynamic_value args50),
+                                                 (ArgsOk: args50 = map (fun x : uint256 => existT (fun t : yul_type => yul_value t) U256 (yul_uint256 x)) args40),
                                              ResultsAgree (call40 decl40 world args40)
                                                           (call50 decl50 world args50) 1%N)
                                 (decls40: string_map L40.AST.decl)
@@ -168,6 +241,7 @@ Lemma interpret_translated_expr {C: VyperConfig}
                                 (DeclsOk: translate_fun_decls B protos decls40 = inr decls50)
                                 (builtins40: string -> option builtin)
                                 (builtins50: string -> option L50.Builtins.yul_builtin)
+                                (BuiltinsOk: AllBuiltinsAgreeIfU256 builtins40 builtins50)
                                 (BuiltinsSafe: forall x,
                                                  builtins50 ("$" ++ x)%string = None)
                                 (ProtosOk: ProtosAgree (map_lookup protos) builtins50)
@@ -183,7 +257,7 @@ Lemma interpret_translated_expr {C: VyperConfig}
     (interpret_expr_metered decls40 call40 builtins40 world loc40 loop_info e40)
     (interpret_expr builtins50 (map_lookup decls50) call50 world loc50 e50) n.
 Proof.
-revert e50 Ok world.
+revert e50 n Ok world.
 induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; cbn; cbn in LocalVarsOk.
 { (* const *) easy. }
 { (* local var *)
@@ -294,7 +368,7 @@ induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; c
     destruct result50 as [values50 | abort50]. 2:{ contradiction. }
     (* arg tail evaluated successfully, let's see what the head does *)
     assert (HeadOk := Forall_inv H (local_vars_agree_weaken_left LocalVarsOk)
-                                 h' (eq_sym Heqmaybe_a') world').
+                                 h' 1%N (eq_sym Heqmaybe_a') world').
     unfold ResultsAgree in HeadOk.
     destruct (interpret_expr_metered decls40 call40 builtins40 world' loc40 loop_info a) as (w40, r40).
     destruct (interpret_expr builtins50 (map_lookup decls50) call50 world' loc50 h') as (w50, r50).
@@ -308,6 +382,7 @@ induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; c
     destruct v50. 2:{ contradiction. }
     destruct HeadOk as (HeadOk, _).
     cbn.
+    
     now f_equal.
   }
   (* do the call *)
@@ -316,6 +391,7 @@ induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; c
   unfold ValueListsAgree in V. destruct V as (W, V).
   destruct r40 as [[v40|a40] | ], r50 as [[v50|a50] | ]; try easy.
   subst w50.
+  
   exact (CallsOk d40 d50 F w40 v40 v50 V).
 }
 (* builtin call *)
@@ -323,12 +399,211 @@ remember (fix translate_expr_list (C : VyperConfig) (l : list L40.AST.expr) (loo
        string + list AST.expr := _) as translate_expr_list.
 remember (translate_expr_list C args loop_depth) as maybe_args'.
 destruct maybe_args' as [err | args']. { discriminate. }
+
+(* look up the prototype; the builtin available at runtime must conform because ProtosOk *)
 remember (Map.lookup protos name) as maybe_proto.
 destruct maybe_proto as [proto|]. 2:discriminate.
+
+remember (proto_is_u256_only proto) as proto_is_u256.
+destruct proto_is_u256. 2:discriminate.
 inversion Ok. subst e50 n. cbn.
 remember (fix interpret_expr_list (world0 : world_state) (loc : memory) (e : list L40.AST.expr):
             world_state * option (expr_result (list uint256)) := _) as interpret_list_40.
 remember (fix interpret_expr_list (world0 : world_state) (loc : string_map dynamic_value) (args0 : list AST.expr) {struct
                 args0} : world_state * option (expr_result (list dynamic_value)) := _) as interpret_list_50.
 assert (P := ProtosOk name). unfold map_lookup in P. rewrite<- Heqmaybe_proto in P.
-*)
+
+(* The types should be all u256. *)
+assert (BB := BuiltinsOk name).
+remember (builtins50 name) as builtin.
+destruct builtin as [builtin|]. 2:contradiction.
+destruct P as (BuiltinInputsOk, BuiltinOutputsOk).
+
+symmetry in Heqproto_is_u256. unfold proto_is_u256_only in Heqproto_is_u256.
+apply andb_prop in Heqproto_is_u256.
+destruct Heqproto_is_u256 as (ProtoInputsU256, ProtoOutputsU256).
+assert (BuiltinInputsU256 := ProtoInputsU256).   rewrite BuiltinInputsOk in BuiltinInputsU256.
+assert (BuiltinOutputsU256 := ProtoOutputsU256). rewrite BuiltinOutputsOk in BuiltinOutputsU256.
+rewrite if_yes with (E := BuiltinInputsU256) in BB.
+rewrite if_yes with (E := BuiltinOutputsU256) in BB.
+(* we'll destruct (builtins40 name) later *)
+
+(* L50 needs to make sure that the name is not shadowed by a local function.
+   This is easy because we prefix all the local functions with '$'
+   but builtin names may not start with '$' ("BuiltinsSafe").
+ *)
+assert (NotMangled: starts_with_dollar name = false).
+{
+  apply (proj1 (mangled_safety_equiv _) BuiltinsSafe name).
+  rewrite<- Heqbuiltin. discriminate.
+}
+assert (DeclsMangled := translated_decls_start_with_dollar decls40 decls50 DeclsOk name).
+destruct (map_lookup decls50 name).
+{
+  assert (W: Some f <> None) by discriminate. apply DeclsMangled in W.
+  rewrite W in NotMangled. discriminate.
+}
+
+(* do the args (dup from PrivateCall case above) *)
+assert (V: ValueListsAgree (interpret_list_40 world loc40 args)
+                           (interpret_list_50 world loc50 args')).
+{
+  symmetry in Heqmaybe_args'.
+  clear Ok H1.
+  revert args' Heqmaybe_args' world H.
+  rewrite Heqtranslate_expr_list.
+  induction args; intros; cbn; cbn in Heqmaybe_args'.
+  { inversion Heqmaybe_args'. now subst. }
+  remember (translate_expr protos a loop_depth) as maybe_a'.
+  destruct maybe_a' as [|(h', n)]. { discriminate. }
+  (* arg must eval to 1 value only *)
+  remember (n =? 1)%N as n_is_1. destruct n_is_1. 2:discriminate.
+  symmetry in Heqn_is_1. apply N.eqb_eq in Heqn_is_1. subst n.
+  rewrite<- Heqtranslate_expr_list in Heqmaybe_args'.
+  remember (translate_expr_list C args loop_depth) as maybe_args_t'.
+  destruct maybe_args_t' as [|t']. { discriminate. }
+  inversion Heqmaybe_args'. subst args'. clear Heqmaybe_args'.
+  rewrite Heqtranslate_expr_list in Heqmaybe_args_t'.
+  assert (TailOk := IHargs (local_vars_agree_weaken_right LocalVarsOk)
+                           t' (eq_sym Heqmaybe_args_t') world
+                           (Forall_inv_tail H)).
+  rewrite Heqinterpret_list_40. cbn. rewrite<- Heqinterpret_list_40.
+  rewrite Heqinterpret_list_50. cbn. rewrite<- Heqinterpret_list_50.
+  destruct (interpret_list_40 world loc40 args) as (world', result40).
+  destruct (interpret_list_50 world loc50 t') as (world50, result50).
+  (* figure out what the arg tail evaluates to *)
+  unfold ValueListsAgree. unfold ValueListsAgree in TailOk.
+  destruct TailOk as (W, R). subst world50.
+  destruct result40 as [result40|]. 2:{ now destruct result50. }
+  destruct result40 as [values40 | abort40].
+  2:{
+    destruct result50 as [result50|]. 2:{ contradiction. }
+    destruct result50 as [values50 | abort50]. { contradiction. }
+    now subst.
+  }
+  destruct result50 as [result50|]. 2:{ contradiction. }
+  destruct result50 as [values50 | abort50]. 2:{ contradiction. }
+  (* arg tail evaluated successfully, let's see what the head does *)
+  assert (HeadOk := Forall_inv H (local_vars_agree_weaken_left LocalVarsOk)
+                               h' 1%N (eq_sym Heqmaybe_a') world').
+  unfold ResultsAgree in HeadOk.
+  destruct (interpret_expr_metered decls40 call40 builtins40 world' loc40 loop_info a) as (w40, r40).
+  destruct (interpret_expr builtins50 (map_lookup decls50) call50 world' loc50 h') as (w50, r50).
+  destruct HeadOk as (W, HeadOk).
+  split. { exact W. }
+  destruct r40 as [r40 |], r50 as [r50 |]; try easy.
+  unfold ExprResultsAgree in HeadOk.
+  destruct r40 as [v40 | a40], r50 as [v50 | a50]; try easy.
+  unfold cons_eval_results.
+  destruct v50. { destruct HeadOk. discriminate. }
+  destruct v50. 2:{ contradiction. }
+  destruct HeadOk as (HeadOk, _).
+  cbn.
+  now f_equal.
+}
+destruct (interpret_list_40 world loc40 args) as (w40, r40).
+destruct (interpret_list_50 world loc50 args') as (w50, r50).
+unfold ValueListsAgree in V. destruct V as (W, V).
+destruct r40 as [[v40|a40] | ], r50 as [[v50|a50] | ]; try easy.
+subst w50.
+destruct (builtins40 name) as [(arity, f40)|]; try contradiction.
+unfold BuiltinsAgree in BB.
+destruct BB as (ArityOk, CallOk).
+remember (fun Earity : (arity =? Datatypes.length v40) = true =>
+     let '(world'', result) := call_builtin v40 Earity (f40 w40) in (world'', Some result)) as good_branch.
+assert (GoodBranchOk:
+  forall E, ResultsAgree (good_branch E)
+    (let '(world'', result) := Builtins.call_builtin builtin w40 v50 in (world'', Some result))
+    (N.of_nat (Datatypes.length (p_outputs proto)))).
+{
+  subst good_branch.
+  intro V40ArityOk.
+  unfold Builtins.call_builtin.
+  subst v50.
+  assert (TC := L50.Builtins.mass_typecheck_u256 v40 (Builtins.b_input_types builtin) BuiltinInputsU256).
+  subst arity.
+  rewrite Nat.eqb_sym in TC.
+  rewrite V40ArityOk in TC.
+  remember (fun
+          E : Builtins.mass_typecheck
+                (map (fun x : uint256 => existT (fun t : yul_type => yul_value t) U256 (yul_uint256 x))
+                   v40) (Builtins.b_input_types builtin) = Builtins.MassTypecheckOk => _) 
+    as mt_good_branch.
+  enough (P: forall TypecheckOk,
+              ResultsAgree (let '(world'', result) := call_builtin v40 V40ArityOk (f40 w40) in (world'', Some result))
+                (let '(world'', result) := mt_good_branch TypecheckOk in (world'', Some result))
+                (N.of_nat (Datatypes.length (p_outputs proto)))).
+  {
+    clear Heqmt_good_branch.
+    destruct Builtins.mass_typecheck; try discriminate.
+    apply P.
+  }
+  intro TypecheckOk. subst mt_good_branch.
+  assert (Q := CallOk w40 v40 V40ArityOk (proj1 (Nat.eqb_eq _ _) V40ArityOk)).
+  destruct (call_builtin v40 V40ArityOk (f40 w40)) as (w40', result40).
+  unfold call_builtin_u256 in Q.
+  assert (M : (map uint256_of_dynamic_value
+               (map (fun x : uint256 => existT (fun t : yul_type => yul_value t) U256 (yul_uint256 x)) v40))
+               = v40).
+  { rewrite List.map_map. cbn. apply List.map_id. }
+  remember (Builtins.call_builtin_helper _ _ _) as foo. clear Heqfoo.
+  remember (Nat.eq_le_incl _ _ _) as bar. clear Heqbar.
+  replace (NaryFun.nary_call (Builtins.b_fun builtin w40)
+        (map uint256_of_dynamic_value
+           (map (fun x : uint256 => existT (fun t : yul_type => yul_value t) U256 (yul_uint256 x)) v40))
+        foo) with (NaryFun.nary_call (Builtins.b_fun builtin w40) v40 bar).
+  2:{
+    clear Q. revert foo bar. rewrite M. intros. f_equal. apply proof_irrelevance.
+  }
+  clear foo M.
+  destruct (NaryFun.nary_call (Builtins.b_fun builtin w40) v40 bar) as ((w50, e50), foo).
+  cbn in Q. destruct Q as (WorldOk, ResultOk).
+  subst w40'.
+  destruct e50 as [result50 | abort50].
+  {
+    (* this is the main line. *)
+    unfold ResultsAgree. split. { trivial. }
+    unfold ExprResultsAgree256 in ResultOk.
+    unfold ExprResultsAgree.
+    destruct result40 as [result40 | abort40]. 2:contradiction.
+    destruct result50 as [|output50].
+    { (* 0 outputs *) cbn. rewrite BuiltinOutputsOk. now destruct (Builtins.b_output_types builtin). }
+    (* 1 outputs *)
+    destruct result50. 2:contradiction. cbn.
+    destruct (Builtins.b_output_types builtin) as [|toutput]. { easy. }
+    rewrite BuiltinOutputsOk in ProtoOutputsU256.
+    assert (TOutput := L50.Builtins.all_are_u256_head _ _ ProtoOutputsU256). subst toutput.
+    rewrite yul_value_of_uint256_u256.
+    destruct l. 2:{ cbn in ResultOk. lia. }
+    destruct ResultOk. split. { now subst. }
+    now rewrite BuiltinOutputsOk.
+  }
+  (* abort in L50 *)
+  cbn. split. { trivial. }
+  unfold ExprResultsAgree256 in ResultOk.
+  unfold ExprResultsAgree.
+  exact ResultOk.
+}
+clear Heqgood_branch.
+remember (arity =? Datatypes.length v40) as v40_ok.
+destruct v40_ok.
+{ apply GoodBranchOk. }
+clear GoodBranchOk good_branch.
+(* the builtin is called with wrong number of arguments *)
+unfold L50.Builtins.call_builtin.
+enough (P: Builtins.mass_typecheck v50 (Builtins.b_input_types builtin)
+            =
+           L50.Builtins.MassTypecheckWrongArity).
+{
+  remember (fun E : Builtins.mass_typecheck v50 (Builtins.b_input_types builtin) = Builtins.MassTypecheckOk
+                  => _) 
+    as mt_good_branch.
+  clear Heqmt_good_branch.
+  now destruct Builtins.mass_typecheck.
+}
+subst v50.
+rewrite L50.Builtins.mass_typecheck_u256 by assumption.
+subst arity.
+rewrite Nat.eqb_sym.
+now rewrite<- Heqv40_ok.
+Qed.

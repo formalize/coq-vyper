@@ -1,2 +1,56 @@
 #! /bin/sh
+
+COQC=$(which coqc)
+if [ $"x$COQC" = x ]
+then
+    echo "coqc not found"
+    exit 1
+fi
+
+
+COQ_VERSION=$("$COQC" -v | head -n 1 | sed 's/^[^0-9]*\([0-9\.]*\) .*$/\1/')
+echo Found Coq $COQ_VERSION
+COQ_MAJOR=$(echo "$COQ_VERSION" | sed 's/\..*$//')
+COQ_MINOR=$(echo "$COQ_VERSION" | sed 's/[^.]*\.\([^\.]*\).*$/\1/')
+
+if [ $COQ_MAJOR -ge 8 ] 
+then
+    if [ $COQ_MAJOR -gt 8 -o $COQ_MINOR -gt 13 ]
+    then
+        echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+        echo '!!                                                                             !!'
+        echo '!!  Coq 8.14 introduced a regression: https://github.com/coq/coq/issues/15067  !!'
+        echo '!!  Until that is fixed, the build will fail. Using Coq 8.13.2 is recommended. !!'
+        echo '!!                                                                             !!'
+        echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+    fi
+fi
+
+
+GHC=$(which ghc)
+if [ x$(which "$GHC") = x ]
+then
+    echo "ghc not found"
+    exit 1
+fi
+
+ALEX=$(which alex)
+if [ x$(which "$ALEX") = x ]
+then
+    echo "alex not found"
+    exit 1
+fi
+
+HAPPY=$(which happy)
+if [ x$(which "$HAPPY") = x ]
+then
+    echo "happy not found"
+    exit 1
+fi
+
+# echo "coqc:  $COQC"
+# echo "ghc:   $GHC"
+# echo "alex:  $ALEX"
+# echo "happy: $HAPPY"
+
 coq_makefile -f _CoqProject -o Makefile
