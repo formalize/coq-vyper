@@ -107,13 +107,13 @@ Fixpoint interpret_stmt {bigger_call_depth_bound smaller_call_depth_bound: nat}
                   | cons (Case guard block) t => fun El =>
                       if (Z_of_uint256 value =? Z_of_uint256 guard)%Z
                         then interpret_block Ebound fc do_call builtins
-                                             world loc loops block (callset_descend_cases_head El Ok)
+                                             world' loc loops block (callset_descend_cases_head El Ok)
                         else dispatch t (callset_descend_cases_tail El Ok)
                   | nil => fun _ =>
                            match default as default' return default = default' -> _ with
                            | Some block => fun Edefault =>
                                 interpret_block Ebound fc do_call builtins
-                                                world loc loops block
+                                                world' loc loops block
                                                 (callset_descend_cases_default
                                                   (eq_ind default (fun x => s = Switch e cases x)
                                                           E (Some _) Edefault)

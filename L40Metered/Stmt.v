@@ -1,4 +1,4 @@
-From Coq Require Import String Arith ZArith PropExtensionality.
+From Coq Require Import String Arith ZArith PropExtensionality Lia.
 
 From Vyper Require Import Config Calldag.
 From Vyper.L10 Require Import Base.
@@ -217,7 +217,7 @@ induction s using stmt_ind'; intros.
   { (* match found *)
     assert (Hh := List.Forall_inv H). cbn in Hh.
     apply (weak_block_metering_ok Ebound fc do_call do_call_metered DoCallOk
-                                         builtins body Hh world loc loops
+                                         builtins body Hh world' loc loops
                                          (callset_descend_cases_head eq_refl COk)).
   }
   (* no match *)
@@ -239,7 +239,7 @@ induction s using stmt_ind'; intros.
   {
     intro Foo.
     apply (weak_block_metering_ok Ebound fc do_call do_call_metered DoCallOk
-                                  builtins (Block default) H0 world loc loops
+                                  builtins (Block default) H0 world' loc loops
                                   DOk).
   }
   intro COk.
@@ -249,7 +249,7 @@ induction s using stmt_ind'; intros.
   { (* match found *)
     assert (Hh := List.Forall_inv H). cbn in Hh.
     apply (weak_block_metering_ok Ebound fc do_call do_call_metered DoCallOk
-                                         builtins body Hh world loc loops
+                                         builtins body Hh world' loc loops
                                          (callset_descend_cases_head eq_refl COk)).
   }
   (* no match *)
@@ -312,12 +312,12 @@ Lemma block_metering_ok
                       FSet.is_subset (block_callset b)
                                      (decl_callset (fun_decl fc))
                       = true):
-  let '(world', result) := interpret_block Ebound fc do_call builtins
+  let '(world_and_loc', result) := interpret_block Ebound fc do_call builtins
                                            world loc loops b CallOk
    in interpret_block_metered (cd_decls cd) do_call_metered builtins
                               world loc loops b
        =
-      (world', Some result).
+      (world_and_loc', Some result).
 Proof.
 refine (weak_block_metering_ok Ebound fc do_call do_call_metered DoCallOk
                                builtins b _ world loc loops CallOk).
@@ -327,4 +327,72 @@ rewrite List.Forall_forall.
 intros s H CallOk world loc loops. clear H.
 apply (stmt_metering_ok Ebound fc do_call do_call_metered DoCallOk
                         builtins world loc loops).
+Qed.
+
+(****************************************************************************)
+(* DEPRECATED *)
+Lemma small_stmt_respects_var_cap
+           {C: VyperConfig}
+           {bigger_call_depth_bound smaller_call_depth_bound: nat}
+           (Ebound: bigger_call_depth_bound = S smaller_call_depth_bound)
+           {cd: calldag}
+           (fc: fun_ctx cd bigger_call_depth_bound)
+           (do_call: forall
+                         (fc': fun_ctx cd smaller_call_depth_bound)
+                         (world: world_state)
+                         (arg_values: list uint256),
+                       world_state * expr_result uint256)
+           (do_call_metered: forall
+                               (decl: L40.AST.decl)
+                               (world: world_state)
+                               (arg_values: list uint256),
+                             world_state * option (expr_result uint256))
+           (DoCallOk: forall (fc': fun_ctx cd smaller_call_depth_bound)
+                             (world: world_state)
+                             (arg_values: list uint256),
+                        let '(world', result) := do_call fc' world arg_values in
+                          do_call_metered (fun_decl fc') world arg_values
+                           =
+                          (world', Some result))
+           (builtins: string -> option builtin)
+           (world: world_state)
+           (loc: memory)
+           (loops: list loop_ctx)
+           (ss: small_stmt)
+           (CallOk: let _ := string_set_impl in 
+                      FSet.is_subset (small_stmt_callset ss)
+                                     (decl_callset (fun_decl fc))
+                      = true):
+  let '(world, loc', result) :=
+      interpret_small_stmt_metered (cd_decls cd) do_call_metered builtins
+                                   world loc loops ss
+  in forall k,
+       (var_cap_small_stmt ss <= k)%N
+        ->
+       let _ := memory_impl in
+       OpenArray.get loc k = OpenArray.get loc' k.
+Proof.
+remember (interpret_small_stmt_metered (cd_decls cd) do_call_metered builtins world loc loops ss) as output.
+destruct output as ((world', loc'), result).
+intros k L. cbn.
+destruct ss; cbn in L; cbn in Heqoutput.
+{ (* abort *) inversion Heqoutput. now subst. }
+{ (* return *)
+  destruct interpret_expr_metered as (w, r).
+  destruct r as [r|]; [destruct r as [|r]|]; inversion Heqoutput; now subst.
+}
+{ (* raise *)
+  destruct interpret_expr_metered as (w, r).
+  destruct r as [r|]; [destruct r as [|r]|]; inversion Heqoutput; now subst.
+}
+{ (* assign *)
+  destruct interpret_expr_metered as (w, r).
+  destruct r as [r|]; [destruct r as [|r]|]; inversion Heqoutput; subst; try easy.
+  rewrite OpenArray.put_ok.
+  assert (B: (lhs <> k)%N) by lia.
+  apply N.eqb_neq in B. now rewrite B.
+}
+(* expr *)
+destruct interpret_expr_metered as (w, r).
+destruct r as [r|]; [destruct r as [|r]|]; inversion Heqoutput; now subst.
 Qed.

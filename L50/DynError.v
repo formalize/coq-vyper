@@ -37,7 +37,7 @@ Definition string_of_dynamic_error (d: dynamic_error)
    | DE_TooFewValues => "too few values"
    | DE_LocalNameShadowing name => "local name shadowed: " ++ name
    | DE_LeaveWithoutFunction => "leave without function"
-   | DE_LeftoverValuesInExpression => "leftover values in expression (use drop())"
+   | DE_LeftoverValuesInExpression => "leftover values in expression (use pop())"
    | DE_SingleBooleanExpected => "single boolean expected"
    | DE_SingleValueExpected => "single value expected"
    | DE_BreakContinueDisallowed => "break and continue not allowed"

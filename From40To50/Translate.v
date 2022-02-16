@@ -64,6 +64,7 @@ Fixpoint translate_expr {C: VyperConfig} (protos: string_map proto)
       end.
 
 Definition translate_small_stmt {C: VyperConfig}
+                                (is_in_function: bool)
                                 (protos: string_map proto)
                                 (ss: L40.AST.small_stmt)
                                 (loop_depth: N)
@@ -91,19 +92,21 @@ Definition translate_small_stmt {C: VyperConfig}
                                               :: nil))
             :: nil)
   | L40.AST.Return e =>
-        match translate_expr protos e loop_depth with
-        | inl err => inl err
-        | inr (e', 0%N) =>
-                  inr (L50.AST.Expr e'
-                      :: L50.AST.Assign ("$$result" :: nil) (L50.AST.Const U256 (yul_uint256 zero256))
-                      :: L50.AST.Leave
-                      :: nil)
-        | inr (e', 1%N) =>
-                  inr (L50.AST.Assign ("$$result" :: nil) e'
-                      :: L50.AST.Leave
-                      :: nil)
-        | _ => inl "too many values"
-        end
+        if is_in_function
+          then match translate_expr protos e loop_depth with
+               | inl err => inl err
+               | inr (e', 0%N) =>
+                       inr (L50.AST.Expr e'
+                          :: L50.AST.Assign ("$$result" :: nil) (L50.AST.Const U256 (yul_uint256 zero256))
+                          :: L50.AST.Leave
+                          :: nil)
+               | inr (e', 1%N) =>
+                       inr (L50.AST.Assign ("$$result" :: nil) e'
+                          :: L50.AST.Leave
+                          :: nil)
+               | _ => inl "too many values"
+               end
+          else inl "cannot return from outside any function"
   | L40.AST.Raise e =>
         match translate_expr protos e loop_depth with
         | inl err => inl err
@@ -154,6 +157,7 @@ Definition translate_small_stmt {C: VyperConfig}
   end.
 
 Fixpoint translate_stmt {C: VyperConfig}
+                        (is_in_function: bool)
                         (B: builtin_names_config)
                         (protos: string_map proto)
                         (s: L40.AST.stmt)
@@ -161,13 +165,13 @@ Fixpoint translate_stmt {C: VyperConfig}
 {struct s}
 : string + list L50.AST.stmt
 := match s with
-   | L40.AST.SmallStmt ss => translate_small_stmt protos ss loop_depth
+   | L40.AST.SmallStmt ss => translate_small_stmt is_in_function protos ss loop_depth
    | L40.AST.Switch e cases maybe_default =>
       let fix translate_cases (l: list L40.AST.case)
           := match l with
              | nil => inr nil
              | (L40.AST.Case guard body) :: t =>
-                  match translate_block B protos body loop_depth with
+                  match translate_block is_in_function B protos body loop_depth with
                   | inl err => inl err
                   | inr body' =>
                       match translate_cases t with
@@ -179,7 +183,7 @@ Fixpoint translate_stmt {C: VyperConfig}
       in let translate_default (d: option L40.AST.block)
              := match d with
                 | None => inr None
-                | Some b => match translate_block B protos b loop_depth with
+                | Some b => match translate_block is_in_function B protos b loop_depth with
                             | inl err => inl err
                             | inr b' => inr (Some b')
                             end
@@ -203,7 +207,7 @@ Fixpoint translate_stmt {C: VyperConfig}
              end
          end
    | L40.AST.Loop index count body =>
-      match translate_block B protos body (N.succ loop_depth) with
+      match translate_block is_in_function B protos body (N.succ loop_depth) with
       | inl err => inl err
       | inr body' =>
           let offset_var := make_var_name "offset" loop_depth in
@@ -230,6 +234,7 @@ Fixpoint translate_stmt {C: VyperConfig}
       end
    end
 with translate_block {C: VyperConfig}
+                     (is_in_function: bool)
                      (B: builtin_names_config)
                      (protos: string_map proto)
                      (b: L40.AST.block)
@@ -239,7 +244,7 @@ with translate_block {C: VyperConfig}
    let fix translate_stmt_list (l: list L40.AST.stmt)
        := match l with
           | nil => inr nil
-          | h :: t => match translate_stmt B protos h loop_depth with
+          | h :: t => match translate_stmt is_in_function B protos h loop_depth with
                       | inl err => inl err
                       | inr h' => match translate_stmt_list t with
                                   | inl err => inl err
@@ -265,7 +270,7 @@ Definition translate_fun_decl {C: VyperConfig}
                               (d: L40.AST.decl)
 : string + L50.AST.fun_decl
 := let '(L40.AST.FunDecl name args_count body) := d in
-   match translate_block B protos body 0%N with
+   match translate_block true B protos body 0%N with
    | inl err => inl err
    | inr (L50.AST.Block body') =>
       inr {| L50.AST.fd_name := name

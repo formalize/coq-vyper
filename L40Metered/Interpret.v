@@ -177,20 +177,19 @@ Fixpoint interpret_stmt_metered {C: VyperConfig}
           | Some (ExprSuccess value) =>
               (fix dispatch (l: list case)
                : world_state * memory * option (stmt_result uint256)
-               := match l as l' return l = l' -> _ with
-                  | cons (Case guard block) t => fun El =>
+               := match l  with
+                  | cons (Case guard block) t =>
                       if (Z_of_uint256 value =? Z_of_uint256 guard)%Z
                         then interpret_block_metered decls do_call builtins
-                                                     world loc loops block
+                                                     world' loc loops block
                         else dispatch t
-                  | nil => fun _ =>
-                           match default as default' return default = default' -> _ with
-                           | Some block => fun Edefault =>
+                  | nil => match default with
+                           | Some block =>
                                 interpret_block_metered decls do_call builtins
-                                                        world loc loops block
-                           | None => fun _ => (world', loc, Some StmtSuccess)
-                           end eq_refl
-                  end eq_refl) cases
+                                                        world' loc loops block
+                           | None => (world', loc, Some StmtSuccess)
+                           end
+                  end) cases
           end
    | Loop var count body => fun E =>
               let _ := memory_impl in

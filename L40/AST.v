@@ -162,3 +162,28 @@ with var_cap_block  {C: VyperConfig} (b: block)
             | h :: t => N.max (var_cap_stmt h) (var_cap_stmt_list t)
             end
    in var_cap_stmt_list body.
+
+Fixpoint max_loop_count_stmt {C: VyperConfig} (s: stmt)
+:= match s with
+   | SmallStmt _ => 0%N
+   | Switch _ cases default =>
+      let fix max_loop_count_cases (l: list case) := 
+                match l with
+                | nil => 0%N
+                | (Case _ body) :: t => N.max (max_loop_count_block body) (max_loop_count_cases t)
+                end
+      in let d := match default with
+                  | Some b => max_loop_count_block b
+                  | None => 0%N
+                  end
+      in N.max (max_loop_count_cases cases) d
+   | Loop _ count body => N.max (Z.to_N (Z_of_uint256 count)) (max_loop_count_block body)
+   end
+with max_loop_count_block {C: VyperConfig} (b: block)
+:= let '(Block body) := b in
+   let fix max_loop_count_stmt_list (l: list stmt) :=
+            match l with
+            | nil => 0%N
+            | h :: t => N.max (max_loop_count_stmt h) (max_loop_count_stmt_list t)
+            end
+   in max_loop_count_stmt_list body.

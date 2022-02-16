@@ -29,6 +29,22 @@ Fixpoint mass_typecheck {C: VyperConfig} (values: list dynamic_value) (types: li
    | _, _ => MassTypecheckWrongArity
    end.
 
+Lemma mass_typecheck_ok_rewrite {C: VyperConfig} (values: list dynamic_value) (types: list yul_type)
+                                {Result: Type} 
+                                (when_ok: mass_typecheck values types = MassTypecheckOk -> Result)
+                                (when_wt: mass_typecheck values types = MassTypecheckWrongType -> Result)
+                                (when_wa: mass_typecheck values types = MassTypecheckWrongArity -> Result)
+                                (Ok: mass_typecheck values types = MassTypecheckOk):
+  match mass_typecheck values types as z return _ = z -> Result with
+  | MassTypecheckOk => when_ok
+  | MassTypecheckWrongType => when_wt
+  | MassTypecheckWrongArity => when_wa
+  end eq_refl = when_ok Ok.
+Proof.
+destruct (mass_typecheck values types); try discriminate.
+f_equal. apply Eqdep_dec.eq_proofs_unicity. decide equality.
+Qed.
+
 (* mass typecheck fails if the numbers of values and types mismatch *)
 Lemma mass_typecheck_length {C: VyperConfig} (values: list dynamic_value) (types: list yul_type)
                             (H: mass_typecheck values types = MassTypecheckOk):

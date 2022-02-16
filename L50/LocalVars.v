@@ -109,3 +109,12 @@ Fixpoint unbind_vars {C: VyperConfig}
    | nil => loc
    | h :: t => unbind_vars t (map_remove loc (snd h))
    end.
+
+Lemma unbind_vars_app {C: VyperConfig}
+                      (a b: list typename)
+                      (loc: string_map dynamic_value):
+  unbind_vars b (unbind_vars a loc) = unbind_vars (a ++ b) loc.
+Proof.
+revert loc. induction a as [|h]; intros. { easy. }
+cbn. apply IHa.
+Qed.

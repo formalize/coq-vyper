@@ -52,37 +52,6 @@ refine (local_vars_agree_weaken _ Ok).
 lia.
 Qed.
 
-(** Value agreement between L40 and L50.
-    [n]: expected length of [e50]
-    The tricky part here is that L50 might have no value where L40 sees zero. 
- *)
-Definition ExprResultsAgree {C: VyperConfig}
-                            (e40: expr_result uint256)
-                            (e50: expr_result (list dynamic_value))
-                            (n: N)
-:= match e40, e50 with
-   | ExprAbort a40, ExprAbort a50               =>  a40 = a50
-   | ExprSuccess v40, ExprSuccess nil           =>  Z_of_uint256 v40 = 0%Z /\ n = 0%N
-   | ExprSuccess v40, ExprSuccess (v50 :: nil)  =>  (* v40 = uint256_of_dynamic_value v50 *)
-                                                    v50 = (existT _ U256 (yul_uint256 v40)) /\ n = 1%N
-   | _, _ => False
-   end.
-
-
-(** Value agreement between L40 and L50, a variant with u256 list on the L50 side.
-    [n]: expected length of [e50]
-    The tricky part here is that L50 might have no value where L40 sees zero.
- *)
-Definition ExprResultsAgree256 {C: VyperConfig}
-                               (e40: expr_result uint256)
-                               (e50: expr_result (list uint256))
-                               (n: N)
-:= match e40, e50 with
-   | ExprAbort a40, ExprAbort a50               =>  a40 = a50
-   | ExprSuccess v40, ExprSuccess nil           =>  Z_of_uint256 v40 = 0%Z /\ n = 0%N
-   | ExprSuccess v40, ExprSuccess (v50 :: nil)  =>  v40 = v50 /\ n = 1%N
-   | _, _ => False
-   end.
 
 (** Same as [ExprResultsAgree] but lifted to [world_state * option]. *)
 Definition ResultsAgree {C: VyperConfig}
@@ -154,41 +123,6 @@ Definition LoopCursorsAgree {C: VyperConfig}
      end.
 
 
-Definition BuiltinsAgree {C: VyperConfig}
-                         (b40: builtin)
-                         (b50: L50.Builtins.yul_builtin)
-                         (B50InputsU256:   L50.Builtins.all_are_u256 (L50.Builtins.b_input_types  b50) = true)
-                         (B50OutputssU256: L50.Builtins.all_are_u256 (L50.Builtins.b_output_types b50) = true)
-:= let '(existT _ arity f40) := b40 in
-       arity = List.length (L50.Builtins.b_input_types b50)
-        /\
-       forall (world: world_state) (args: list uint256)
-              (LenOk40: arity =? List.length args = true)
-              (LenOk50: List.length (Builtins.b_input_types b50) = List.length args),
-         let (w40, e40) := (call_builtin args LenOk40 (f40 world)) in
-         let (w50, e50) := (call_builtin_u256 b50 world args LenOk50) in
-         w40 = w50  /\  ExprResultsAgree256 e40 e50 
-                                            (N.of_nat (List.length (L50.Builtins.b_output_types b50))).
-
-Definition AllBuiltinsAgreeIfU256 {C: VyperConfig}
-                                  (builtins40: string -> option builtin)
-                                  (builtins50: string -> option L50.Builtins.yul_builtin)
-:= forall name: string,
-     match builtins50 name with
-     | None => True
-     | Some b50 =>
-        (if L50.Builtins.all_are_u256 (L50.Builtins.b_input_types b50) as z return _ = z -> _
-         then 
-           fun i256 =>
-            (if L50.Builtins.all_are_u256 (L50.Builtins.b_output_types b50) as z return _ = z -> _
-              then fun o256 =>
-                   match builtins40 name with
-                   | None => False
-                   | Some b40 => BuiltinsAgree b40 b50 i256 o256
-                   end
-              else fun _ => True) eq_refl
-         else fun _ => True) eq_refl
-     end.
 
 Lemma if_yes_prop cond yes no
                   (E: cond = true):
