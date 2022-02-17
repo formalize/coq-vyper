@@ -21,7 +21,16 @@ Fixpoint interpret_call {C: VyperConfig}
    | O => (world, None)
    | S new_max_call_depth =>
         match bind_vars_to_values (fd_inputs f) arg_values Map.empty with
-        | inl err => (world, Some (expr_error (string_of_dynamic_error err)))
+        | inl err =>
+            (* since L10-L40 produce a slightly better error message than "too few values",
+               namely "function called with too few arguments", it's better to repeat it here.
+             *)
+            (world, Some (expr_error
+                            match err with
+                            | DE_TooFewValues => "function called with too few arguments"
+                            | DE_TooManyValues => "function called with too many arguments"
+                            | _ => string_of_dynamic_error err
+                            end))
         | inr loc_with_args_only =>
             match bind_vars_to_zeros (fd_outputs f) loc_with_args_only with
             | inl err => (world, Some (expr_error (string_of_dynamic_error err)))
@@ -34,7 +43,7 @@ Fixpoint interpret_call {C: VyperConfig}
                 in (world', match result with
                             | None => None
                             | Some StmtSuccess =>
-                                match get_vars_by_typenames (fd_outputs f) loc with
+                                match get_vars_by_typenames (fd_outputs f) loc' with
                                 | inl err => Some (expr_error (string_of_dynamic_error err))
                                 | inr outputs => Some (ExprSuccess outputs)
                                 end

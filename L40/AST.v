@@ -187,3 +187,40 @@ with max_loop_count_block {C: VyperConfig} (b: block)
             | h :: t => N.max (max_loop_count_stmt h) (max_loop_count_stmt_list t)
             end
    in max_loop_count_stmt_list body.
+
+Definition max_loop_count_decl {C: VyperConfig} (d: L40.AST.decl)
+:= let '(L40.AST.FunDecl _ _ body) := d in
+   L40.AST.max_loop_count_block body.
+
+Definition max_loop_count_decl_list {C: VyperConfig} (l: list L40.AST.decl)
+:= List.fold_right N.max 0%N (List.map max_loop_count_decl l).
+
+Definition max_loop_count_decl_map {C: VyperConfig} (l: string_map L40.AST.decl)
+:= let _ := string_map_impl in
+   max_loop_count_decl_list (List.map snd (Map.items l)).
+
+Lemma enough_iterations_for_decl {C: VyperConfig}
+                                 {declmap: string_map decl}
+                                 {name: string}
+                                 {d: decl}
+                                 (Found: L10.Base.map_lookup declmap name = Some d)
+                                 {m: N}
+                                 (EnoughForEverything: (max_loop_count_decl_map declmap < m)%N):
+  (max_loop_count_decl d < m)%N.
+Proof.
+unfold max_loop_count_decl_map in EnoughForEverything.
+unfold L10.Base.map_lookup in Found.
+rewrite Map.items_ok in Found.
+remember (Map.items declmap) as alist. clear Heqalist.
+induction alist as [|(k,v)]. { easy. }
+cbn in Found.
+destruct string_dec.
+{
+  inversion Found. subst v. clear Found.
+  cbn in EnoughForEverything.
+  now apply N.max_lub_lt_iff in EnoughForEverything.
+}
+apply (IHalist Found).
+cbn in EnoughForEverything.
+now apply N.max_lub_lt_iff in EnoughForEverything.
+Qed.

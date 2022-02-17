@@ -60,11 +60,17 @@ Definition ResultsAgree {C: VyperConfig}
                         (n: N)
 := let '(w40, r40) := result40 in
    let '(w50, r50) := result50 in
-   w40 = w50
-    /\
    match r40, r50 with
-   | Some e40, Some e50 => ExprResultsAgree e40 e50 n
-   | None, None => True
+   | Some e40, Some e50 =>
+        match e40, e50 with
+        | ExprAbort AbortBreak, ExprAbort AbortBreak (* it was a mistake to allow exprs to do that *)
+        | ExprAbort AbortContinue, ExprAbort AbortContinue  => w40 = w50
+        | ExprAbort _, ExprAbort _ => get_world_except_memory w40 = get_world_except_memory w50
+        | _, _ => w40 = w50
+        end
+         /\
+        ExprResultsAgree e40 e50 n
+   | None, None => w40 = w50
    | _, _ => False
    end.
 
@@ -77,15 +83,20 @@ Definition ValueListsAgree {C: VyperConfig}
                            (result50: world_state * option (expr_result (list dynamic_value)))
 := let '(w40, r40) := result40 in
    let '(w50, r50) := result50 in
-   w40 = w50
-    /\
    match r40, r50 with
+   | Some (ExprAbort AbortBreak), Some (ExprAbort AbortBreak)
+   | Some (ExprAbort AbortContinue), Some (ExprAbort AbortContinue) =>
+        w40 = w50
    | Some (ExprAbort a40), Some (ExprAbort a50) =>
+        get_world_except_memory w40 = get_world_except_memory w50
+         /\
         a40 = a50
    | Some (ExprSuccess e40), Some (ExprSuccess e50) =>
         (* e40 = map uint256_of_dynamic_value e50 *)
+        w40 = w50
+         /\
         e50 = map (fun x => existT _ U256 (yul_uint256 x)) e40
-   | None, None => True
+   | None, None => w40 = w50
    | _, _ => False
    end.
 
@@ -151,28 +162,36 @@ Lemma interpret_translated_expr {C: VyperConfig}
                                 {n: N}
                                 {loop_depth: N}
                                 (Ok: translate_expr protos e40 loop_depth = inr (e50, n))
+                                (decls40: string_map L40.AST.decl)
+                                (decls50: string_map L50.AST.fun_decl)
+                                (DeclsOk: translate_fun_decls B protos decls40 = inr decls50)
                                 (call40: forall
                                               (decl: L40.AST.decl)
                                               (world: world_state)
                                               (arg_values: list uint256),
                                             world_state * option (expr_result uint256))
                                 (call50: forall
+                                              (max_loop_iterations: nat)
                                               (decl: L50.AST.fun_decl)
                                               (world: world_state)
                                               (arg_values: list dynamic_value),
                                             world_state * option (expr_result (list dynamic_value)))
-                                (CallsOk: forall (decl40: L40.AST.decl)
+                                (CallsOk: forall (max_loop_iterations: nat)
+                                                 (decl40: L40.AST.decl)
                                                  (decl50: L50.AST.fun_decl)
                                                  (Ok: translate_fun_decl B protos decl40 = inr decl50)
                                                  (world: world_state)
                                                  (args40: list uint256)
                                                  (args50: list dynamic_value)
-                                                 (ArgsOk: args50 = map (fun x : uint256 => existT (fun t : yul_type => yul_value t) U256 (yul_uint256 x)) args40),
+                                                 (ArgsOk: args50 = map (fun x : uint256 => existT (fun t : yul_type => yul_value t) U256 (yul_uint256 x)) args40)
+                                                 (EnoughIters: (L40.AST.max_loop_count_decl decl40 < N.of_nat max_loop_iterations)%N)
+                                                 (EnoughIterationsForEverything:
+                                                   (L40.AST.max_loop_count_decl_map decls40 < N.of_nat max_loop_iterations)%N),
                                              ResultsAgree (call40 decl40 world args40)
-                                                          (call50 decl50 world args50) 1%N)
-                                (decls40: string_map L40.AST.decl)
-                                (decls50: string_map L50.AST.fun_decl)
-                                (DeclsOk: translate_fun_decls B protos decls40 = inr decls50)
+                                                          (call50 max_loop_iterations decl50 world args50) 1%N)
+                                (max_loop_iterations: nat)
+                                (EnoughIterationsForEverything:
+                                   (L40.AST.max_loop_count_decl_map decls40 < N.of_nat max_loop_iterations)%N)
                                 (builtins40: string -> option builtin)
                                 (builtins50: string -> option L50.Builtins.yul_builtin)
                                 (BuiltinsOk: AllBuiltinsAgreeIfU256 builtins40 builtins50)
@@ -189,7 +208,7 @@ Lemma interpret_translated_expr {C: VyperConfig}
                                 (CursorsOk: LoopCursorsAgree loop_info loc50):
   ResultsAgree
     (interpret_expr_metered decls40 call40 builtins40 world loc40 loop_info e40)
-    (interpret_expr builtins50 (map_lookup decls50) call50 world loc50 e50) n.
+    (interpret_expr builtins50 (map_lookup decls50) (call50 max_loop_iterations) world loc50 e50) n.
 Proof.
 revert e50 n Ok world.
 induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; cbn; cbn in LocalVarsOk.
@@ -253,7 +272,8 @@ induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; c
   (* looking up the same function in both maps *)
   cbn in BuiltinsSafe.
   rewrite BuiltinsSafe.
-  destruct (map_lookup decls40 name) as [d40|].
+  remember (map_lookup decls40 name) as lookup_d40.
+  destruct lookup_d40 as [d40|].
   2:{ cbn in F. now destruct (map_lookup decls50). }
   cbn in F. destruct (map_lookup decls50) as [d50|]. 2:contradiction.
 
@@ -290,12 +310,11 @@ induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; c
     destruct (interpret_list_50 world loc50 t') as (world50, result50).
     (* figure out what the arg tail evaluates to *)
     unfold ValueListsAgree. unfold ValueListsAgree in TailOk.
-    destruct TailOk as (W, R). subst world50.
     destruct result40 as [result40|]. 2:{ now destruct result50. }
     destruct result40 as [values40 | abort40].
     2:{
-      destruct result50 as [result50|]. 2:{ contradiction. }
-      destruct result50 as [values50 | abort50]. { contradiction. }
+      destruct result50 as [result50|]. 2:{ easy. }
+      destruct result50 as [values50 | abort50]. { now destruct abort40. }
       now subst.
     }
     destruct result50 as [result50|]. 2:{ contradiction. }
@@ -304,29 +323,34 @@ induction e40 using L40.AST.expr_ind'; intros; cbn in Ok; inversion Ok; subst; c
     assert (HeadOk := Forall_inv H (local_vars_agree_weaken_left LocalVarsOk)
                                  h' 1%N (eq_sym Heqmaybe_a') world').
     unfold ResultsAgree in HeadOk.
+    destruct TailOk as (W, V). subst world50. subst values50.
     destruct (interpret_expr_metered decls40 call40 builtins40 world' loc40 loop_info a) as (w40, r40).
-    destruct (interpret_expr builtins50 (map_lookup decls50) call50 world' loc50 h') as (w50, r50).
-    destruct HeadOk as (W, HeadOk).
-    split. { exact W. }
+    destruct (interpret_expr builtins50 (map_lookup decls50) _ world' loc50 h') as (w50, r50).
     destruct r40 as [r40 |], r50 as [r50 |]; try easy.
     unfold ExprResultsAgree in HeadOk.
     destruct r40 as [v40 | a40], r50 as [v50 | a50]; try easy.
     unfold cons_eval_results.
-    destruct v50. { destruct HeadOk. discriminate. }
-    destruct v50. 2:{ contradiction. }
-    destruct HeadOk as (HeadOk, _).
-    cbn.
-    
-    now f_equal.
+    destruct v50. { destruct HeadOk as (_, (_, Bad)). discriminate. }
+    destruct v50. 2:{ tauto. }
+    destruct HeadOk as (W, (HeadOk, _)).
+    cbn. now subst.
+    now destruct a40, a50.
   }
   (* do the call *)
   destruct (interpret_list_40 world loc40 args) as (w40, r40).
   destruct (interpret_list_50 world loc50 args') as (w50, r50).
-  unfold ValueListsAgree in V. destruct V as (W, V).
+  unfold ValueListsAgree in V.
   destruct r40 as [[v40|a40] | ], r50 as [[v50|a50] | ]; try easy.
+  destruct V as (W, V).
   subst w50.
-  
-  exact (CallsOk d40 d50 F w40 v40 v50 V).
+
+  apply (CallsOk max_loop_iterations d40 d50 F w40 v40 v50 V).
+  apply (L40.AST.enough_iterations_for_decl (eq_sym Heqlookup_d40));
+    apply EnoughIterationsForEverything.
+  apply EnoughIterationsForEverything.
+  now destruct a40.
+  now destruct a40, a50.
+  now destruct a40.
 }
 (* builtin call *)
 remember (fix translate_expr_list (C : VyperConfig) (l : list L40.AST.expr) (loop_depth : N) {struct l} :
@@ -407,12 +431,11 @@ assert (V: ValueListsAgree (interpret_list_40 world loc40 args)
   destruct (interpret_list_50 world loc50 t') as (world50, result50).
   (* figure out what the arg tail evaluates to *)
   unfold ValueListsAgree. unfold ValueListsAgree in TailOk.
-  destruct TailOk as (W, R). subst world50.
   destruct result40 as [result40|]. 2:{ now destruct result50. }
   destruct result40 as [values40 | abort40].
   2:{
-    destruct result50 as [result50|]. 2:{ contradiction. }
-    destruct result50 as [values50 | abort50]. { contradiction. }
+    destruct result50 as [result50|]. 2:{ easy. }
+    destruct result50 as [values50 | abort50]. { now destruct abort40. }
     now subst.
   }
   destruct result50 as [result50|]. 2:{ contradiction. }
@@ -421,24 +444,24 @@ assert (V: ValueListsAgree (interpret_list_40 world loc40 args)
   assert (HeadOk := Forall_inv H (local_vars_agree_weaken_left LocalVarsOk)
                                h' 1%N (eq_sym Heqmaybe_a') world').
   unfold ResultsAgree in HeadOk.
+  destruct TailOk as (W, V). subst world50. subst values50.
   destruct (interpret_expr_metered decls40 call40 builtins40 world' loc40 loop_info a) as (w40, r40).
-  destruct (interpret_expr builtins50 (map_lookup decls50) call50 world' loc50 h') as (w50, r50).
-  destruct HeadOk as (W, HeadOk).
-  split. { exact W. }
+  destruct (interpret_expr builtins50 (map_lookup decls50) _ world' loc50 h') as (w50, r50).
   destruct r40 as [r40 |], r50 as [r50 |]; try easy.
   unfold ExprResultsAgree in HeadOk.
   destruct r40 as [v40 | a40], r50 as [v50 | a50]; try easy.
   unfold cons_eval_results.
-  destruct v50. { destruct HeadOk. discriminate. }
-  destruct v50. 2:{ contradiction. }
-  destruct HeadOk as (HeadOk, _).
-  cbn.
-  now f_equal.
+  destruct v50. { destruct HeadOk as (_, (_, Bad)). discriminate. }
+  destruct v50. 2:{ tauto. }
+  destruct HeadOk as (W, (HeadOk, _)).
+  cbn. now subst.
+  now destruct a40, a50.
 }
 destruct (interpret_list_40 world loc40 args) as (w40, r40).
 destruct (interpret_list_50 world loc50 args') as (w50, r50).
-unfold ValueListsAgree in V. destruct V as (W, V).
+unfold ValueListsAgree in V.
 destruct r40 as [[v40|a40] | ], r50 as [[v50|a50] | ]; try easy.
+destruct V as (W, V).
 subst w50.
 destruct (builtins40 name) as [(arity, f40)|]; try contradiction.
 unfold BuiltinsAgree in BB.
@@ -496,7 +519,7 @@ assert (GoodBranchOk:
   destruct e50 as [result50 | abort50].
   {
     (* this is the main line. *)
-    unfold ResultsAgree. split. { trivial. }
+    unfold ResultsAgree. split. { now destruct result40. }
     unfold ExprResultsAgree256 in ResultOk.
     unfold ExprResultsAgree.
     destruct result40 as [result40 | abort40]. 2:contradiction.
@@ -513,7 +536,7 @@ assert (GoodBranchOk:
     now rewrite BuiltinOutputsOk.
   }
   (* abort in L50 *)
-  cbn. split. { trivial. }
+  cbn. split. { destruct result40 as [|a40]. { trivial. } now destruct a40, abort50. }
   unfold ExprResultsAgree256 in ResultOk.
   unfold ExprResultsAgree.
   exact ResultOk.
@@ -540,4 +563,7 @@ rewrite L50.Builtins.mass_typecheck_u256 by assumption.
 subst arity.
 rewrite Nat.eqb_sym.
 now rewrite<- Heqv40_ok.
+now destruct a40.
+now destruct a40, a50.
+now destruct a40.
 Qed.

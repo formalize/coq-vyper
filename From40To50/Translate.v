@@ -277,7 +277,13 @@ Definition translate_fun_decl {C: VyperConfig}
            ; L50.AST.fd_inputs := make_input_typenames args_count
            ; L50.AST.fd_outputs := (U256, "$$result") :: nil
            ; L50.AST.fd_body :=
-                L50.AST.Block (make_var_declarations args_count (L40.AST.var_cap_block body) ++ body')
+                L50.AST.Block (make_var_declarations args_count (L40.AST.var_cap_block body) 
+                                ++
+                               body'
+                                ++
+                               (L50.AST.Assign ("$$result" :: nil)
+                                               (L50.AST.Const U256 (yul_uint256 zero256))
+                                :: nil))
           |}
    end.
 

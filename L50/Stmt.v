@@ -547,6 +547,33 @@ destruct result as [result|]. 2:easy.
 destruct result; try easy. apply IHstmts. assumption.
 Qed.
 
+Lemma interpret_stmt_list_no_vars_bind {C: VyperConfig}
+                                       (max_loop_iterations: nat)
+                                       (builtins: string -> option yul_builtin)
+                                       (funs: string -> option fun_decl)
+                                       (this_fun_decl: option fun_decl)
+                                       (do_call: fun_decl -> world_state -> list dynamic_value ->
+                                                   world_state * option (expr_result (list dynamic_value)))
+                                       (world: world_state)
+                                       (loc: string_map dynamic_value)
+                                       (stmts: list stmt)
+                                       (NoVars: stmt_list_has_top_level_var_decls stmts = false):
+  interpret_stmt_list_no_unbind max_loop_iterations builtins funs
+                                this_fun_decl do_call
+                                world loc stmts
+   =
+  (interpret_stmt_list max_loop_iterations builtins funs
+                       this_fun_decl do_call
+                       world loc stmts,
+   nil).
+Proof.
+rewrite interpret_stmt_list_unbind_later.
+assert (A := interpret_stmt_list_no_unbind_no_vars max_loop_iterations builtins funs this_fun_decl
+                                                   do_call world loc stmts).
+destruct interpret_stmt_list_no_unbind as (((w, l), r), v).
+now rewrite (A NoVars).
+Qed.
+
 (** Interpreting [a ++ b] when neither [a] nor [b] contain local variable declarations.
  *)
 Lemma interpret_stmt_list_app {C: VyperConfig}
