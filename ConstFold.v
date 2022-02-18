@@ -1569,12 +1569,7 @@ remember (fun name arg_names body
         '(world', _, result) :=
          interpret_stmt eq_refl (const_fold_fun_ctx ok fc) (interpret_call builtins) builtins world
            loc body (Interpret.interpret_call_helper E) in
-         (world',
-         match result with
-         | Base.StmtSuccess => Base.ExprSuccess zero256
-         | Base.StmtAbort a => Base.ExprAbort a
-         | Base.StmtReturnFromFunction x => Base.ExprSuccess x
-         end)
+         (world', _)
     end) as branch_l.
 remember (fun name arg_names body
               (E : fun_decl fc = FunDecl name arg_names body) =>
@@ -1585,12 +1580,7 @@ remember (fun name arg_names body
               '(world', _, result) :=
                interpret_stmt eq_refl fc (interpret_call builtins) builtins world loc body
                  (Interpret.interpret_call_helper E) in
-               (world',
-               match result with
-               | Base.StmtSuccess => Base.ExprSuccess zero256
-               | Base.StmtAbort a => Base.ExprAbort a
-               | Base.StmtReturnFromFunction x => Base.ExprSuccess x
-               end)
+               (world', _)
           end) as branch_r.
 enough (B: forall name arg_names body_l body_r E_l E_r,
              branch_l name arg_names body_l E_l

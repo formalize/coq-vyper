@@ -57,12 +57,7 @@ remember (fun name arg_names body
                 '(world', _, result) :=
                  Stmt.interpret_stmt eq_refl (translate_fun_ctx fc ok) (Interpret.interpret_call builtins)
                    builtins world loc body (Interpret.interpret_call_helper E) in
-                 (world',
-                 match result with
-                 | StmtSuccess => ExprSuccess zero256
-                 | StmtAbort a => ExprAbort a
-                 | StmtReturnFromFunction x => ExprSuccess x
-                 end)
+                 (world', _)
             end) as branch_20.
 remember (fun name arg_names body
               (E : fun_decl fc = L10.AST.FunDecl name arg_names body) =>
@@ -73,12 +68,7 @@ remember (fun name arg_names body
                 '(world', _, result) :=
                  Stmt.interpret_stmt_list eq_refl fc (L10.Interpret.interpret_call builtins) builtins world
                    loc body (L10.Interpret.interpret_call_helper E) in
-                 (world',
-                 match result with
-                 | StmtSuccess => ExprSuccess zero256
-                 | StmtAbort a => ExprAbort a
-                 | StmtReturnFromFunction x => ExprSuccess x
-                 end)
+                 (world', _)
             end) as branch_10.
 assert (B: forall name arg_names body20 body10 E20 E10,
              branch_20 name arg_names body20 E20 = branch_10 name arg_names body10 E10).

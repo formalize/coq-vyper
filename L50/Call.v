@@ -47,6 +47,9 @@ Fixpoint interpret_call {C: VyperConfig}
                                 | inl err => Some (expr_error (string_of_dynamic_error err))
                                 | inr outputs => Some (ExprSuccess outputs)
                                 end
+                            | Some (StmtAbort AbortBreak)
+                            | Some (StmtAbort AbortContinue) =>
+                                Some (expr_error (string_of_dynamic_error DE_BreakContinueDisallowed))
                             | Some (StmtAbort a) => Some (ExprAbort a)
                             | Some (StmtReturnFromFunction x) => Some (ExprSuccess x)
                             end)

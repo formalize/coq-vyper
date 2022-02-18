@@ -52,6 +52,8 @@ Fixpoint interpret_call {call_depth_bound: nat}
                    in (world', match result with
                                | StmtSuccess => ExprSuccess zero256
                                | StmtReturnFromFunction x => ExprSuccess x
+                               | StmtAbort AbortBreak
+                               | StmtAbort AbortContinue => expr_error "break and continue not allowed"
                                | StmtAbort a => ExprAbort a
                                end)
               else (world, expr_error

@@ -596,12 +596,7 @@ remember (fun name arity body
            '(world', _, result) :=
             Stmt.interpret_stmt eq_refl (translate_fun_ctx fc ok) (Interpret.interpret_call builtins)
               builtins world (OpenArray.from_list arg_values) body (Interpret.interpret_call_helper E) in
-            (world',
-            match result with
-            | StmtSuccess => ExprSuccess zero256
-            | StmtAbort a => ExprAbort a
-            | StmtReturnFromFunction x => ExprSuccess x
-            end)
+            (world', _)
           else (world,
      expr_error
        (if match N.to_nat arity with
@@ -619,12 +614,7 @@ remember (fun name arg_names body
                 '(world', _, result) :=
                  L20.Stmt.interpret_stmt eq_refl fc (L20.Interpret.interpret_call builtins) builtins world loc
                    body (L20.Interpret.interpret_call_helper E) in
-                 (world',
-                 match result with
-                 | StmtSuccess => ExprSuccess zero256
-                 | StmtAbort a => ExprAbort a
-                 | StmtReturnFromFunction x => ExprSuccess x
-                 end)
+                 (world', _)
             end) as branch_20.
 assert (B: forall name arg_names body30 body20 E30 E20,
              branch_30 name (N.of_nat (List.length arg_names)) body30 E30

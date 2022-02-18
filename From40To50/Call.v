@@ -690,7 +690,7 @@ assert (GetOutput: forall (indices: list N),
   exact M.
 }
 destruct r40 as [|ab40|x40], r50 as [|ab50|x50]; try easy; try rewrite GetOutput;
-  try destruct ab40; try destruct ab50; try easy.
+  try destruct ab40; try destruct ab50; subst; try easy.
 (* success on both sides *)
 split. { tauto. }
 now rewrite (proj2 Agreement).

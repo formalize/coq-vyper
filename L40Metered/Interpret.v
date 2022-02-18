@@ -276,6 +276,8 @@ Fixpoint interpret_call_metered {C: VyperConfig}
                    in (world', match result with
                                | Some StmtSuccess => Some (ExprSuccess zero256)
                                | Some (StmtReturnFromFunction x) => Some (ExprSuccess x)
+                               | Some (StmtAbort AbortBreak)
+                               | Some (StmtAbort AbortContinue) => Some (expr_error "break and continue not allowed")
                                | Some (StmtAbort a) => Some (ExprAbort a)
                                | None => None
                                end)

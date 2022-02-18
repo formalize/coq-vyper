@@ -57,12 +57,7 @@ remember (fun name arity body
            '(world', _, result) :=
             interpret_stmt eq_refl (translate_fun_ctx B fc) (interpret_call builtins) builtins world
               (OpenArray.from_list arg_values) body (Interpret.interpret_call_helper E) in
-            (world',
-            match result with
-            | StmtSuccess => ExprSuccess zero256
-            | StmtAbort a => ExprAbort a
-            | StmtReturnFromFunction x => ExprSuccess x
-            end)
+            (world', _)
           else
            (world,
            expr_error
@@ -81,12 +76,7 @@ remember (fun name arity body
      '(world', _, result) :=
       interpret_stmt eq_refl fc (interpret_call builtins) builtins world
         (OpenArray.from_list arg_values) body (Interpret.interpret_call_helper E) in
-      (world',
-      match result with
-      | StmtSuccess => ExprSuccess zero256
-      | StmtAbort a => ExprAbort a
-      | StmtReturnFromFunction x => ExprSuccess x
-      end)
+      (world', _)
     else
      (world,
      expr_error
