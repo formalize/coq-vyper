@@ -284,3 +284,16 @@ Fixpoint interpret_call_metered {C: VyperConfig}
                                then "function called with too few arguments"
                                else "function called with too many arguments")))
    end.
+
+Definition interpret_metered {C: VyperConfig}
+                             (max_call_depth: nat)
+                             (decls: string_map L40.AST.decl)
+                             (builtins: string -> option builtin)
+                             (fun_name: string)
+                             (world: world_state)
+                             (arg_values: list uint256)
+: world_state * option (expr_result uint256)
+:= match map_lookup decls fun_name with
+   | Some d => interpret_call_metered max_call_depth decls builtins d world arg_values
+   | None => (world, Some (expr_error "declaration not found"))
+   end.

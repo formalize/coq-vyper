@@ -31,7 +31,7 @@ compileString src =
                 addIndentsAndNewlines $ 
                 recognizeKeywords $ 
                 alexScanTokens src in
-    case compile sample_config builtin_names_std l10 of
+    case compile sample_config builtin_names_std embeddedProtos l10 of
         Left err -> error err
         Right result -> result
 
@@ -49,7 +49,7 @@ extIsOk _ = False
 compileFile :: String -> IO ()
 compileFile path =
     let (base, ext) = splitExtension path in
-    let dst = base ++ ".l30" in
+    let dst = base ++ ".yul" in
     if extIsOk ext
         then compileFileTo path dst
         else error "Unknown input extension, expected '.fe' or '.vy'"

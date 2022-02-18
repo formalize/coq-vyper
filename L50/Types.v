@@ -126,6 +126,9 @@ Definition yul_uint256 {C: VyperConfig} (value: uint256)
 
 Definition dynamic_value {C: VyperConfig} := { t: yul_type & yul_value t }.
 
+Definition dynamic_value_of_uint256 {C: VyperConfig} (value: uint256)
+:= existT _ U256 (yul_uint256 value).
+
 Definition uint256_of_yul_value {C: VyperConfig} {t: yul_type} (y: yul_value t)
 : uint256
 := match y with

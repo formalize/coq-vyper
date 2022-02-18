@@ -71,7 +71,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                           | StmtAbort a => ExprAbort a
                           end)
           end
-      | _ => fun _ => (world, expr_error "a declaration is found but it's not a function")
+      | _ => fun _ => (world, expr_error "declaration not found")
       end eq_refl
   end eq_refl.
 

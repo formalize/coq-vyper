@@ -695,3 +695,51 @@ destruct r40 as [|ab40|x40], r50 as [|ab50|x50]; try easy; try rewrite GetOutput
 split. { tauto. }
 now rewrite (proj2 Agreement).
 Qed.
+
+Lemma translate_ok {C: VyperConfig}
+                   (max_call_depth: nat)
+                   (max_loop_iterations: nat)
+
+                   {B: builtin_names_config}
+                   (builtins40: string -> option L10.Base.builtin)
+                   (builtins50: string -> option L50.Builtins.yul_builtin)
+                   (BuiltinsOk: AllBuiltinsAgreeIfU256 builtins40 builtins50)
+                   (BuiltinsBasics: BuiltinsSupportBasics builtins50)
+                   (BuiltinsSafe: forall x,
+                                    builtins50 ("$" ++ x)%string = None)
+                   (BuiltinsHaveArith: BuiltinsSupportUInt256 B builtins40)
+                   {protos: string_map proto}
+                   (KnownProtosOk: check_known_protos B (map_lookup protos) = true)
+                   (ProtosOk: ProtosAgree (map_lookup protos) builtins50)
+                   {decls40: string_map L40.AST.decl}
+                   {decls50: string_map L50.AST.fun_decl}
+                   (DeclsOk: translate_fun_decls B protos decls40 = inr decls50)
+
+                   (EnoughIterationsForEverything:
+                      (L40.AST.max_loop_count_decl_map decls40 < N.of_nat max_loop_iterations)%N)
+
+                   (fun_name: string)
+                   (world: world_state)
+                   (arg_values: list uint256):
+  ResultsAgree
+    (L40Metered.Interpret.interpret_metered max_call_depth decls40 builtins40
+                                            fun_name world arg_values)
+    (L50.Call.interpret max_call_depth max_loop_iterations builtins50
+                        (map_lookup decls50)
+                        ("$" ++ fun_name) world
+                        (List.map (fun x => (existT _ U256 (yul_uint256 x))) arg_values))
+    1%N.
+Proof.
+unfold L40Metered.Interpret.interpret_metered.
+unfold L50.Call.interpret.
+assert (T := translate_fun_decls_ok DeclsOk fun_name).
+remember (map_lookup decls40 fun_name) as maybe_d40.
+destruct maybe_d40 as [d40|], (map_lookup decls50 ("$" ++ fun_name)) as [d50|];
+  try easy.
+assert (EnoughIters := L40.AST.enough_iterations_for_decl (eq_sym Heqmaybe_d40)
+                                                          EnoughIterationsForEverything).
+apply (interpret_translated_call _ _ _ _ BuiltinsOk BuiltinsBasics BuiltinsSafe BuiltinsHaveArith
+                                 KnownProtosOk ProtosOk DeclsOk
+                                 d40 d50 T
+                                 EnoughIterationsForEverything EnoughIters).
+Qed.

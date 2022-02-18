@@ -53,3 +53,17 @@ Fixpoint interpret_call {C: VyperConfig}
             end
         end
    end.
+
+Definition interpret {C: VyperConfig}
+                     (max_call_depth: nat)
+                     (max_loop_iterations: nat)
+                     (builtins: string -> option yul_builtin)
+                     (funs: string -> option fun_decl)
+                     (fun_name: string)
+                     (world: world_state)
+                     (args: list dynamic_value)
+: world_state * option (expr_result (list dynamic_value))
+:= match funs fun_name with
+   | Some f => interpret_call max_call_depth max_loop_iterations builtins funs f world args
+   | None => (world, Some (expr_error "declaration not found"))
+   end.

@@ -58,7 +58,7 @@ Fixpoint interpret_call {call_depth_bound: nat}
                       (if (List.length arg_values <? N.to_nat arity)%nat
                          then "function called with too few arguments"
                          else "function called with too many arguments"))
-        | _ => fun _ => (world, expr_error "a declaration is found but it's not a function")
+        | _ => fun _ => (world, expr_error "declaration not found")
         end eq_refl
    end eq_refl.
 
