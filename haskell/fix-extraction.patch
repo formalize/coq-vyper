@@ -1,0 +1,27 @@
+--- Extracted.hs	2021-10-26 15:00:30.339160975 +0300
++++ PatchedExtracted.hs	2021-10-26 15:14:33.319158245 +0300
+@@ -1,9 +1,14 @@
+ {-# OPTIONS_GHC -cpp -XMagicHash #-}
+ {- For Hugs, use the option -F"cpp -P -traditional" -}
+ 
+-module Extracted where
++module PatchedExtracted where
++
++import qualified Data.Bits
++import qualified Data.Char
++import qualified Data.Word
+ 
+ import qualified Prelude
++import qualified Unsafe.Coerce
+ 
+ #ifdef __GLASGOW_HASKELL__
+ import qualified GHC.Base
+@@ -14,7 +19,7 @@
+ 
+ #ifdef __GLASGOW_HASKELL__
+ unsafeCoerce :: a -> b
+-unsafeCoerce = GHC.Base.unsafeCoerce#
++unsafeCoerce = Unsafe.Coerce.unsafeCoerce
+ #else
+ -- HUGS
+ unsafeCoerce :: a -> b

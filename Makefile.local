@@ -16,7 +16,13 @@ haskell/Extracted.hs: Extract.vo Extract.vos Extract.glob
 haskell/PatchedExtracted.hs: haskell/Extracted.hs
 	(cd haskell && patch -i fix-extraction.patch -o PatchedExtracted.hs)
 
-haskell/coq-vyperc: haskell/*.hs haskell/Lexer.hs haskell/Parser.hs haskell/PatchedExtracted.hs haskell/BuiltinsParser.hs
+haskell/GenerateBuiltinsTable: haskell/GenerateBuiltinsTable.hs haskell/PatchedExtracted.hs haskell/BuiltinsParser.hs
+	(cd haskell && ${GHC} GenerateBuiltinsTable.hs)
+
+haskell/EmbeddedBuiltinsTable.hs: haskell/GenerateBuiltinsTable
+	(cd haskell && ./GenerateBuiltinsTable ../builtins.list EmbeddedBuiltinsTable.hs)
+
+haskell/coq-vyperc: haskell/*.hs haskell/Lexer.hs haskell/Parser.hs haskell/PatchedExtracted.hs haskell/BuiltinsParser.hs haskell/EmbeddedBuiltinsTable.hs
 	(cd haskell && ${GHC} coq-vyperc.hs)
 
 real-all: haskell/coq-vyperc
