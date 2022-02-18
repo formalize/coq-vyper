@@ -3,10 +3,10 @@
 This is a toy verified compiler for a small uint256-only language that is a dialect of [Vyper](https://github.com/vyperlang/vyper) or [Fe](https://github.com/ethereum/fe).
 It is not very useful currently since it does not support even maps, but it demonstrates verified compilation of all the checked arithmetic and all the usual control flow into Yul.
 
-
 # What Does it Do
 
-The verified part transforms an AST to an AST. Neither parsing the source nor printing the resulting AST are verified.
+The verified part transforms an AST to an AST. It is defined in [Compile.v](Compile.v).
+Parsing the source and printing the result are not verified.
 
 The compiler features a preliminary pass that decorates each function with a maximal possible call depth (or detects recursion). After that, it performs 6 passes:
 1. resolves calls; processes assertions and augmented assignments; converts range loops to the less restrictive counted loops; makes AST more regular
@@ -22,7 +22,7 @@ See also [NUANCES.md](NUANCES.md) for some fine details on language definition.
 
 - install the prerequisites: *alex happy ghc coq*
 
-- Coq 8.13 is required, 8.14 and later versions won't work until [https://github.com/coq/coq/issues/15067](this bug) is fixed.
+- Coq 8.13 is required, 8.14 and later versions won't work until [this bug](https://github.com/coq/coq/issues/15067) is fixed.
 
 - do the usual:
 
